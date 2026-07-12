@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Paceometer</title>
+
+  <!-- PWA / home screen behavior -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0b0b0f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Paceometer">
+
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <main id="app">
+    <div id="status" class="status">searching for GPS…</div>
+    <div id="speed" class="speed">--</div>
+    <div id="unit" class="unit">mph</div>
+  </main>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
