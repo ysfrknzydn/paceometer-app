@@ -127,6 +127,15 @@ html, body {
   letter-spacing: 0.1em;
 }
 
+.pace {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: #d0d0d6;
+  margin-top: 1.25rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
 .trip-btn {
   margin-top: 2.5rem;
   width: 100%;

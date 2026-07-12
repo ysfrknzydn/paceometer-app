@@ -5,9 +5,30 @@ A real-time in-car pace/speed display, built as a Progressive Web App. Part of a
 ## What it does right now
 
 - Reads live GPS speed from the browser's Geolocation API and displays it full-screen.
+- Shows a live pace readout (minutes required to cover 10 miles at the current speed) alongside speed — the debiasing display from Peer & Gamliel (2013).
 - Email/password sign-in (Supabase Auth).
 - Start/End Trip button that records average and max speed for the session and saves it to a Supabase database, tied to the signed-in user.
 - No raw location (latitude/longitude) is ever sent off the device — only derived speed metrics.
+
+## Getting the app on your phone
+
+The app lives at **https://ysfrknzydn.github.io/paceometer-app/** — no App Store, no install file, just a URL.
+
+**iPhone (Safari):**
+1. Open the URL above in **Safari** (not Chrome — iOS only allows "Add to Home Screen" PWA installs from Safari).
+2. Tap the **Share** icon (square with an arrow pointing up) in the toolbar.
+3. Scroll down and tap **Add to Home Screen**.
+4. Tap **Add** in the top right.
+5. A "Paceometer" icon appears on your home screen. Opening it launches full-screen, with no browser address bar — it behaves like an installed app.
+6. The first time you open it, allow location access when prompted, or it won't be able to read your speed.
+
+**Android (Chrome):**
+1. Open the URL above in Chrome.
+2. Tap the **⋮** menu in the top right.
+3. Tap **Add to Home screen** (Chrome may instead prompt this automatically as "Install app").
+4. Confirm, then launch it from the home screen icon the same way.
+
+Either way, sign in once with email/password — Supabase keeps you signed in between launches, so this is a one-time step.
 
 ## Stack
 
@@ -52,4 +73,4 @@ Pushing to `main` is enough — GitHub Pages serves directly from the repo root 
 
 ## Status
 
-Early-stage proof of concept. Currently missing: the "optimal pace zone" concept (a reference speed with a target range, from the original research design) — right now it only shows raw speed, and `pct_time_in_zone` in the trips table is unused until that's built.
+Early-stage proof of concept. Currently missing: the "optimal zone" concept (a marginal-time-savings threshold, not yet a literature-validated feature — see project notes for why this is being defined carefully rather than borrowed from a paper). `pct_time_in_zone` in the trips table is unused until that's built.

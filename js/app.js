@@ -2,10 +2,19 @@ import { supabase } from "./supabaseClient.js";
 
 const statusEl = document.getElementById("status");
 const speedEl = document.getElementById("speed");
+const paceEl = document.getElementById("pace");
 const tripBtn = document.getElementById("trip-btn");
 const tripStatusEl = document.getElementById("trip-status");
 
 const MPS_TO_MPH = 2.23694;
+
+// Reference distance for the pace readout, per Peer & Gamliel (2013)'s
+// original "Paceometer": minutes required to cover a fixed distance,
+// shown alongside (not instead of) speed. 10 miles matches their mph
+// version. Below ~1 mph the pace is undefined/meaningless (near-infinite),
+// so it's hidden rather than shown as a huge or NaN number.
+const PACE_REFERENCE_MILES = 10;
+const PACE_MIN_SPEED_MPH = 1;
 
 let watchId = null;
 let lastPosition = null;
@@ -20,6 +29,19 @@ function setStatus(text, className) {
 
 function setSpeedDisplay(mph) {
   speedEl.textContent = Math.max(0, Math.round(mph));
+}
+
+function setPaceDisplay(mph) {
+  if (mph < PACE_MIN_SPEED_MPH) {
+    paceEl.textContent = "--";
+    return;
+  }
+  // t = d/v, converted to minutes:seconds -- the exact formula validated
+  // in Peer & Gamliel (2013), Formula (1).
+  const totalSeconds = Math.round((PACE_REFERENCE_MILES / mph) * 3600);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  paceEl.textContent = `${minutes}:${String(seconds).padStart(2, "0")} / ${PACE_REFERENCE_MILES}mi`;
 }
 
 function haversineMeters(a, b) {
@@ -66,6 +88,7 @@ function handlePosition(position) {
 
   if (mph !== null) {
     setSpeedDisplay(mph);
+    setPaceDisplay(mph);
     recordSample(mph);
   }
 
@@ -167,6 +190,7 @@ tripBtn.addEventListener("click", () => {
 export function startApp() {
   setStatus("searching for GPS…");
   setSpeedDisplay(0);
+  setPaceDisplay(0);
   startWatching();
 }
 
