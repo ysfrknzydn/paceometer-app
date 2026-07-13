@@ -9,9 +9,24 @@ create table if not exists public.trips (
   ended_at timestamptz,
   avg_speed_mph numeric,
   max_speed_mph numeric,
+  min_speed_mph numeric,
+  distance_miles numeric,
+  sample_count integer,
+  -- Mean of the per-sample pace (t = d/v, seconds to cover the reference
+  -- distance), not derived from avg_speed_mph -- mean-of-pace and
+  -- pace-of-mean-speed differ, so this is an independent check on the
+  -- live pace formula, not a duplicate of it.
+  avg_pace_seconds numeric,
   pct_time_in_zone numeric,
   created_at timestamptz not null default now()
 );
+
+-- Additive migration for projects created before these columns existed --
+-- safe to re-run, and a no-op on a fresh table (already created above).
+alter table public.trips add column if not exists min_speed_mph numeric;
+alter table public.trips add column if not exists distance_miles numeric;
+alter table public.trips add column if not exists sample_count integer;
+alter table public.trips add column if not exists avg_pace_seconds numeric;
 
 alter table public.trips enable row level security;
 

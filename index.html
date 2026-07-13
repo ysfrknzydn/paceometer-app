@@ -13,6 +13,27 @@
   <meta name="apple-mobile-web-app-title" content="Paceometer">
 
   <link rel="stylesheet" href="css/style.css">
+
+  <script>
+    // iOS Safari has a long-standing bug where it fails to recompute the
+    // layout viewport after a rotation, leaving the page rendered at the
+    // pre-rotation scale until something forces a relayout -- it reads as
+    // "zoomed in" after flipping the phone on its side. Nudging
+    // initial-scale off 1 and immediately back forces that relayout.
+    (function () {
+      var viewport = document.querySelector('meta[name="viewport"]');
+      var base = viewport.getAttribute("content");
+      window.addEventListener("orientationchange", function () {
+        viewport.setAttribute(
+          "content",
+          base.replace("initial-scale=1", "initial-scale=1.0001")
+        );
+        requestAnimationFrame(function () {
+          viewport.setAttribute("content", base);
+        });
+      });
+    })();
+  </script>
 </head>
 <body>
   <div id="auth-screen" class="screen">
@@ -29,11 +50,32 @@
   <main id="app" class="screen hidden">
     <button id="sign-out" class="sign-out" type="button">Sign out</button>
     <div id="status" class="status">searching for GPS…</div>
-    <div id="speed" class="speed">--</div>
-    <div id="unit" class="unit">mph</div>
-    <div id="pace" class="pace">--</div>
-    <button id="trip-btn" class="trip-btn" type="button">Start Trip</button>
-    <div id="trip-status" class="trip-status"></div>
+    <div class="readout">
+      <div id="speed" class="speed">--</div>
+      <div id="unit" class="unit">mph</div>
+      <div id="pace" class="pace">--</div>
+      <div class="time-saved-gauge">
+        <div id="time-saved-label" class="time-saved-label">--</div>
+        <div class="time-saved-track">
+          <div class="time-saved-center-line"></div>
+          <div id="time-saved-fill" class="time-saved-fill"></div>
+        </div>
+        <div id="time-saved-detail" class="time-saved-detail"></div>
+      </div>
+    </div>
+    <div class="trip-controls">
+      <button id="trip-btn" class="trip-btn" type="button">Start Trip</button>
+      <div id="trip-status" class="trip-status"></div>
+      <div id="trip-time-saved" class="trip-time-saved"></div>
+      <!-- Dev tool for testing indoors without driving. Remove this block
+           (button + progress bar) along with its app.js code (search
+           "DEV TOOL") before shipping to real study participants -- see
+           CLAUDE.md pre-launch checklist. -->
+      <button id="simulate-btn" class="simulate-btn" type="button">Start Simulated Drive</button>
+      <div id="simulate-progress" class="simulate-progress hidden">
+        <div id="simulate-progress-fill" class="simulate-progress-fill"></div>
+      </div>
+    </div>
   </main>
 
   <script type="module" src="js/auth.js"></script>

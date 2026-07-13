@@ -21,7 +21,7 @@ html, body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 0 1.5rem;
+  padding: 0 calc(1.5rem + env(safe-area-inset-right)) 0 calc(1.5rem + env(safe-area-inset-left));
 }
 
 .hidden {
@@ -87,7 +87,7 @@ html, body {
 .sign-out {
   position: absolute;
   top: env(safe-area-inset-top, 16px);
-  right: 1rem;
+  right: calc(1rem + env(safe-area-inset-right));
   background: none;
   border: none;
   color: #8a8a92;
@@ -98,6 +98,8 @@ html, body {
 .status {
   position: absolute;
   top: env(safe-area-inset-top, 16px);
+  left: 50%;
+  transform: translateX(-50%);
   font-size: 0.9rem;
   letter-spacing: 0.02em;
   color: #8a8a92;
@@ -110,6 +112,12 @@ html, body {
 
 .status.error {
   color: #f87171;
+}
+
+.readout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .speed {
@@ -136,8 +144,106 @@ html, body {
   letter-spacing: 0.02em;
 }
 
-.trip-btn {
+/* Horizontal gauge for "time saved vs 10s ago" -- a bold word label plus a
+   center-zero bar (right = gaining time, left = losing it) so the meaning
+   lands in a glance instead of requiring the driver to read and interpret a
+   number. Color reinforces the same zone as the bar direction/length and
+   the label text, so no single channel (color alone, in particular) carries
+   the whole message -- important for a display meant to be read at speed.
+   The zone thresholds are this project's own heuristic for visualizing
+   diminishing returns, not a literature-derived "optimal zone" (see
+   CLAUDE.md). */
+.time-saved-gauge {
+  width: 100%;
+  max-width: 280px;
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.time-saved-label {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8a8a92;
+  margin-bottom: 0.5rem;
+}
+
+.time-saved-track {
+  position: relative;
+  width: 100%;
+  height: 16px;
+  background: #17171c;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.time-saved-center-line {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #2c2c34;
+}
+
+.time-saved-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  background: #8a8a92;
+  border-radius: 8px;
+}
+
+.time-saved-detail {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: #8a8a92;
+  font-variant-numeric: tabular-nums;
+  min-height: 1.1em;
+}
+
+.time-saved-label.significant {
+  color: #4ade80;
+}
+.time-saved-fill.significant {
+  background: #4ade80;
+}
+
+.time-saved-label.diminishing {
+  color: #facc15;
+}
+.time-saved-fill.diminishing {
+  background: #facc15;
+}
+
+.time-saved-label.negligible {
+  color: #8a8a92;
+}
+.time-saved-fill.negligible {
+  background: #8a8a92;
+}
+
+.time-saved-label.losing {
+  color: #f87171;
+}
+.time-saved-fill.losing {
+  background: #f87171;
+}
+
+.trip-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
   margin-top: 2.5rem;
+}
+
+.trip-btn {
   width: 100%;
   max-width: 280px;
 }
@@ -147,4 +253,110 @@ html, body {
   font-size: 0.9rem;
   color: #8a8a92;
   min-height: 1.2em;
+}
+
+.trip-time-saved {
+  margin-top: 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #8a8a92;
+  font-variant-numeric: tabular-nums;
+  min-height: 1.2em;
+}
+
+.trip-time-saved.ahead {
+  color: #4ade80;
+}
+
+.trip-time-saved.behind {
+  color: #f87171;
+}
+
+/* Dev tool -- deliberately styled so it reads as "not a real app control". */
+.simulate-btn {
+  margin-top: 1.5rem;
+  width: 100%;
+  max-width: 280px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.6rem 1rem;
+  border-radius: 10px;
+  border: 1px dashed #f59e0b;
+  background: transparent;
+  color: #f59e0b;
+}
+
+.simulate-progress {
+  margin-top: 0.6rem;
+  width: 100%;
+  max-width: 280px;
+  height: 4px;
+  background: #17171c;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.simulate-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: #f59e0b;
+}
+
+/* Phone turned on its side (mounted horizontally on the dash): the viewport
+   is short and wide, so stack the readout and trip controls side by side
+   instead of vertically. Sizes here are set explicitly off dvh (the
+   constrained axis, and the dynamic viewport unit so it stays correct as
+   Safari's toolbar shows/hides) rather than reusing the portrait vw-based
+   sizing, which read as way too large/zoomed-in once the short axis became
+   the width instead of the height. */
+@media (orientation: landscape) {
+  #app {
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    gap: 6vw;
+  }
+
+  .speed {
+    font-size: 32dvh;
+  }
+
+  .unit {
+    font-size: 1rem;
+    margin-top: 0.25rem;
+  }
+
+  .pace {
+    font-size: 1.3rem;
+    margin-top: 0.6rem;
+  }
+
+  .time-saved-gauge {
+    margin-top: 0.75rem;
+    max-width: 220px;
+  }
+
+  .time-saved-label {
+    font-size: 0.95rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .time-saved-detail {
+    font-size: 0.75rem;
+    margin-top: 0.35rem;
+  }
+
+  .trip-controls {
+    margin-top: 0;
+    max-width: 200px;
+  }
+
+  .trip-time-saved {
+    font-size: 0.85rem;
+  }
+
+  .simulate-btn {
+    font-size: 0.75rem;
+    padding: 0.5rem 0.75rem;
+  }
 }
