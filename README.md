@@ -49,12 +49,12 @@ js/supabaseClient.js     Supabase client setup (URL + anon key)
 js/auth.js               sign-in/sign-up, gates the app behind a session
 js/app.js                GPS watch, speed display, trip start/stop + save
 manifest.json             PWA "Add to Home Screen" config
-supabase/schema.sql      database schema + Row Level Security policies
+supabase/migrations/     versioned database schema + Row Level Security policies
 ```
 
 ## Database setup
 
-Run `supabase/schema.sql` in the Supabase project's SQL Editor (**SQL Editor → New query**) to create the `trips` table and its RLS policies. Policies restrict each signed-in user to inserting and reading only their own rows — nobody but the developer (via the Supabase dashboard or a service-role key, which is never used client-side) can see the full table.
+Schema changes are tracked as versioned migrations in `supabase/migrations/` and applied with the Supabase CLI (`supabase db push`) rather than pasted by hand into the SQL Editor — see `CLAUDE.md` for the full workflow. The current schema creates a `trips` table with RLS policies that restrict each signed-in user to inserting and reading only their own rows — nobody but the developer (via the Supabase dashboard or a service-role key, which is never used client-side) can see the full table.
 
 The anon key in `js/supabaseClient.js` is safe to have committed to this public repo — it identifies the app, not a secret. Row Level Security is the actual access boundary, not the key.
 

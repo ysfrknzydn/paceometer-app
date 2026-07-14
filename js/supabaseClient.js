@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.2";
 
 // The anon key is safe to commit -- it identifies the app, not a secret.
-// Row Level Security policies (see supabase/schema.sql) are what actually
+// Row Level Security policies (see supabase/migrations/) are what actually
 // gate access, not this key.
 const SUPABASE_URL = "https://ojhhlxmbawckknnpgmfj.supabase.co";
 const SUPABASE_ANON_KEY =
