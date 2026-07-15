@@ -194,39 +194,61 @@ html, body {
   letter-spacing: 0.06em;
 }
 
-.zone-indicator.in-zone {
-  border-color: #facc15;
-  background: rgba(250, 204, 21, 0.08);
-}
-.zone-state.in-zone,
-.zone-value.in-zone {
-  color: #facc15;
-}
-
-.zone-indicator.out-of-zone {
+/* Traffic-light mapping: green = clearly still helps to speed up (well
+   below the reference-speed boundary), yellow = still helps but the gain is
+   shrinking as the boundary approaches, red = past the boundary, speeding up
+   further won't buy meaningful time. Reuses the same green/red already used
+   elsewhere for "good"/"bad" (.status.live, .trip-summary-value tones) so
+   the color vocabulary stays consistent app-wide. */
+.zone-indicator.green {
   border-color: #4ade80;
   background: rgba(74, 222, 128, 0.08);
 }
-.zone-state.out-of-zone,
-.zone-value.out-of-zone {
+.zone-state.green,
+.zone-value.green {
   color: #4ade80;
+}
+
+.zone-indicator.yellow {
+  border-color: #facc15;
+  background: rgba(250, 204, 21, 0.08);
+}
+.zone-state.yellow,
+.zone-value.yellow {
+  color: #facc15;
+}
+
+.zone-indicator.red {
+  border-color: #f87171;
+  background: rgba(248, 113, 113, 0.08);
+}
+.zone-state.red,
+.zone-value.red {
+  color: #f87171;
 }
 
 /* Core Loop "state confirmed" cue: a brief outward ring pulse, color-matched
    to the zone, the moment the state actually flips. */
-@keyframes zone-flash-in-zone {
-  0% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0.55); }
-  100% { box-shadow: 0 0 0 16px rgba(250, 204, 21, 0); }
-}
-@keyframes zone-flash-out-of-zone {
+@keyframes zone-flash-green {
   0% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.55); }
   100% { box-shadow: 0 0 0 16px rgba(74, 222, 128, 0); }
 }
-.zone-indicator.in-zone.zone-flash {
-  animation: zone-flash-in-zone 0.6s ease-out;
+@keyframes zone-flash-yellow {
+  0% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0.55); }
+  100% { box-shadow: 0 0 0 16px rgba(250, 204, 21, 0); }
 }
-.zone-indicator.out-of-zone.zone-flash {
-  animation: zone-flash-out-of-zone 0.6s ease-out;
+@keyframes zone-flash-red {
+  0% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.55); }
+  100% { box-shadow: 0 0 0 16px rgba(248, 113, 113, 0); }
+}
+.zone-indicator.green.zone-flash {
+  animation: zone-flash-green 0.6s ease-out;
+}
+.zone-indicator.yellow.zone-flash {
+  animation: zone-flash-yellow 0.6s ease-out;
+}
+.zone-indicator.red.zone-flash {
+  animation: zone-flash-red 0.6s ease-out;
 }
 
 .trip-controls {
@@ -249,7 +271,11 @@ html, body {
   min-height: 1.2em;
 }
 
-.trip-time-saved {
+/* Neutral (gray, not green/red) deliberately, same reasoning as the
+   end-of-trip summary below: a running average over the trip so far isn't
+   the live signal to act on right now (the zone indicator above it already
+   is that), so it doesn't get a good/bad color treatment. */
+.trip-zone-progress {
   margin-top: 0.5rem;
   font-size: 0.95rem;
   font-weight: 600;
@@ -258,12 +284,15 @@ html, body {
   min-height: 1.2em;
 }
 
-.trip-time-saved.ahead {
-  color: #4ade80;
-}
-
-.trip-time-saved.behind {
-  color: #f87171;
+/* Second line under the percentage -- same neutral-color reasoning, smaller
+   and dimmer since it's the supporting detail, not the headline number. */
+.trip-zone-progress-time {
+  margin-top: 0.15rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #6a6a72;
+  font-variant-numeric: tabular-nums;
+  min-height: 1.1em;
 }
 
 /* Accessory Feature: end-of-trip summary. Neutral (white, not amber/green)
@@ -321,10 +350,27 @@ html, body {
 }
 
 /* Dev tool -- deliberately styled so it reads as "not a real app control". */
-.simulate-btn {
-  margin-top: 1.5rem;
+.simulate-controls {
+  display: flex;
+  gap: 0.5rem;
   width: 100%;
   max-width: 280px;
+  margin-top: 1.5rem;
+}
+
+.simulate-profile {
+  flex: 1;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.6rem 0.4rem;
+  border-radius: 10px;
+  border: 1px dashed #f59e0b;
+  background: #17171c;
+  color: #f59e0b;
+}
+
+.simulate-btn {
+  flex: 2;
   font-size: 0.85rem;
   font-weight: 600;
   padding: 0.6rem 1rem;
@@ -404,8 +450,12 @@ html, body {
     max-width: 200px;
   }
 
-  .trip-time-saved {
+  .trip-zone-progress {
     font-size: 0.85rem;
+  }
+
+  .trip-zone-progress-time {
+    font-size: 0.7rem;
   }
 
   .trip-summary-heading {
@@ -430,6 +480,17 @@ html, body {
   .trip-summary #trip-summary-dismiss {
     margin-top: 1rem;
     max-width: 200px;
+  }
+
+  .simulate-controls {
+    flex-direction: column;
+    max-width: 200px;
+    margin-top: 0.75rem;
+  }
+
+  .simulate-profile {
+    font-size: 0.7rem;
+    padding: 0.4rem 0.5rem;
   }
 
   .simulate-btn {

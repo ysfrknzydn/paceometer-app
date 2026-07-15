@@ -11,13 +11,15 @@ const readoutEl = document.getElementById("readout");
 const tripControlsEl = document.getElementById("trip-controls");
 const tripBtn = document.getElementById("trip-btn");
 const tripStatusEl = document.getElementById("trip-status");
-const tripTimeSavedEl = document.getElementById("trip-time-saved");
+const tripZoneProgressEl = document.getElementById("trip-zone-progress");
+const tripZoneProgressTimeEl = document.getElementById("trip-zone-progress-time");
 const tripSummaryEl = document.getElementById("trip-summary");
 const tripSummaryValueEl = document.getElementById("trip-summary-value");
 const tripSummaryCaptionEl = document.getElementById("trip-summary-caption");
 const tripSummaryDetailEl = document.getElementById("trip-summary-detail");
 const tripSummarySaveStatusEl = document.getElementById("trip-summary-save-status");
 const tripSummaryDismissBtn = document.getElementById("trip-summary-dismiss");
+const simulateProfileEl = document.getElementById("simulate-profile");
 const simulateBtn = document.getElementById("simulate-btn");
 const simulateProgressEl = document.getElementById("simulate-progress");
 const simulateProgressFillEl = document.getElementById("simulate-progress-fill");
@@ -32,25 +34,6 @@ const MPS_TO_MPH = 2.23694;
 // it's hidden below PACE_MIN_SPEED_MPH rather than shown as a huge number.
 const PACE_REFERENCE_MILES = 10;
 const PACE_MIN_SPEED_MPH = 5;
-
-// Ongoing "time saved this trip": (time the distance driven so far would
-// take at this baseline speed) minus (actual elapsed trip time). 55 mph is
-// a placeholder round number, not a specific speed limit or a
-// literature-derived reference -- an open design decision (see CLAUDE.md
-// pre-launch checklist) to revisit before drawing conclusions from it. It's
-// safe to change or replace with a different baseline entirely later: it's
-// only used for this live display, and isn't written to Supabase -- the
-// trip's distance_miles/started_at/ended_at columns already let any
-// baseline be applied retroactively during analysis.
-//
-// NOTE: this predates the professor-meeting steer (2026-07-15) to lead with
-// the zone concept rather than a baseline-speed comparison -- the newer
-// end-of-trip summary (see showTripSummary/pct_time_in_zone below)
-// deliberately avoids a "vs Xmph" framing for that reason. This live
-// readout still uses one, so it's now inconsistent with the summary it
-// sits right next to. Left alone for this pass since it wasn't in today's
-// requested scope, but worth resolving together rather than separately.
-const TRIP_BASELINE_SPEED_MPH = 55;
 
 let watchId = null;
 let lastPosition = null;
@@ -102,26 +85,89 @@ function paceSecondsFor(mph) {
 const ZONE_SPEED_INCREMENT_MPH = 10;
 const ZONE_THRESHOLD_SECONDS = 60;
 
+// Traffic-light display (2026-07-15 revision): a red/yellow/green readout
+// needs a second boundary above ZONE_THRESHOLD_SECONDS, marking "still
+// helps, but the gain is shrinking" apart from "clearly still helps."
+// Doubling the 60s threshold to 120s isn't itself literature-derived (like
+// ZONE_THRESHOLD_SECONDS, it's this project's own design choice), but on the
+// same t=d/v hyperbola it lands on an exact, clean 50mph boundary --
+// 360000/(v*(v+10)) = 120 solves to v = 50 exactly -- giving an explainable
+// pair: green below ~50mph, yellow ~50-73mph, red above ~73mph.
+const ZONE_NEARING_THRESHOLD_SECONDS = 120;
+
 // Core Loop: "display confirms the new state" only means something if the
-// state is trustworthy. Right at the ~73mph boundary, GPS speed noise alone
-// (routinely 1-2mph) moves the marginal-seconds value by a few seconds --
-// enough to flip the raw threshold back and forth on consecutive fixes if
-// you're cruising near it, which is a very normal place to sit on a
-// highway. This hysteresis band means the state only flips once the value
-// clears the threshold by ZONE_HYSTERESIS_SECONDS in the new direction, so
-// noise near the boundary can't retrigger a flip -- confirmed with the
-// professor's collaborator, not a literature-derived number.
+// state is trustworthy. Right at the ~50mph/~73mph boundaries, GPS speed
+// noise alone (routinely 1-2mph) moves the marginal-seconds value by a few
+// seconds -- enough to flip the raw threshold back and forth on consecutive
+// fixes if you're cruising near one, which is a very normal place to sit.
+// This hysteresis band means the state only moves once the value clears a
+// boundary by ZONE_HYSTERESIS_SECONDS in the new direction, so noise near a
+// boundary can't retrigger a flip -- confirmed with the professor's
+// collaborator, not a literature-derived number.
 const ZONE_HYSTERESIS_SECONDS = 10;
 
 zoneCaptionEl.textContent = `time saved at +${ZONE_SPEED_INCREMENT_MPH}mph`;
 
-let zoneInZone = null; // null until the first valid reading
+const ZONE_STATE_LABELS = {
+  green: "SPEED STILL HELPS",
+  yellow: "NEARING THE LIMIT",
+  red: "SPEED WON'T HELP",
+};
+
+let zoneState = null; // "green" | "yellow" | "red", null until the first valid reading
 
 function marginalSecondsSaved(mph) {
   const now = paceSecondsFor(mph);
   if (now === null) return null;
   const faster = paceSecondsFor(mph + ZONE_SPEED_INCREMENT_MPH);
   return now - faster;
+}
+
+// The speed at which marginalSecondsSaved(v) == ZONE_THRESHOLD_SECONDS --
+// i.e. "the fastest speed where going faster still meaningfully helps."
+// Solved algebraically rather than hardcoded (~72.6mph) so it stays correct
+// if ZONE_THRESHOLD_SECONDS or ZONE_SPEED_INCREMENT_MPH ever changes:
+// marginalSecondsSaved(v) = (PACE_REFERENCE_MILES*3600*ZONE_SPEED_INCREMENT_MPH)
+// / (v*(v+ZONE_SPEED_INCREMENT_MPH)); setting that equal to
+// ZONE_THRESHOLD_SECONDS and solving the resulting quadratic for v gives the
+// formula below. Used by the end-of-trip summary (see endTrip) to answer "how
+// far behind the fastest pace that actually mattered was this trip," instead
+// of a flat percentage that reads the same whether a highway trip topped out
+// at 75mph or 40mph -- see README's "How the pace/zone math works" section.
+function zoneCeilingMph() {
+  const k = PACE_REFERENCE_MILES * 3600 * ZONE_SPEED_INCREMENT_MPH;
+  return (
+    (-ZONE_SPEED_INCREMENT_MPH +
+      Math.sqrt(ZONE_SPEED_INCREMENT_MPH ** 2 + (4 * k) / ZONE_THRESHOLD_SECONDS)) /
+    2
+  );
+}
+
+// Applies hysteresis independently at each of the two boundaries. Using
+// plain sequential ifs (not else-if) lets a big single-fix jump cascade
+// through both boundaries in one call -- e.g. red straight to green if the
+// reading jumps from well below 60s to well above 130s.
+function nextZoneState(rounded, previous) {
+  if (previous === null) {
+    if (rounded < ZONE_THRESHOLD_SECONDS) return "red";
+    if (rounded < ZONE_NEARING_THRESHOLD_SECONDS) return "yellow";
+    return "green";
+  }
+
+  let state = previous;
+  if (state === "green" && rounded < ZONE_NEARING_THRESHOLD_SECONDS - ZONE_HYSTERESIS_SECONDS) {
+    state = "yellow";
+  }
+  if (state === "yellow" && rounded < ZONE_THRESHOLD_SECONDS - ZONE_HYSTERESIS_SECONDS) {
+    state = "red";
+  }
+  if (state === "red" && rounded > ZONE_THRESHOLD_SECONDS + ZONE_HYSTERESIS_SECONDS) {
+    state = "yellow";
+  }
+  if (state === "yellow" && rounded > ZONE_NEARING_THRESHOLD_SECONDS + ZONE_HYSTERESIS_SECONDS) {
+    state = "green";
+  }
+  return state;
 }
 
 function formatDuration(totalSeconds) {
@@ -138,10 +184,10 @@ function formatDuration(totalSeconds) {
 // get it -- the state word alone answers "does it help", the number answers
 // "by how much", both readable well within the NHTSA 2s glance guideline.
 function setZoneDisplay(marginalSeconds) {
-  const previousInZone = zoneInZone;
+  const previousZoneState = zoneState;
 
   if (marginalSeconds === null) {
-    zoneInZone = null;
+    zoneState = null;
     zoneStateEl.textContent = "--";
     zoneStateEl.className = "zone-state";
     zoneValueEl.textContent = "--";
@@ -151,27 +197,18 @@ function setZoneDisplay(marginalSeconds) {
   }
 
   const rounded = Math.round(marginalSeconds);
-  if (zoneInZone === null) {
-    zoneInZone = rounded >= ZONE_THRESHOLD_SECONDS;
-  } else if (zoneInZone && rounded < ZONE_THRESHOLD_SECONDS - ZONE_HYSTERESIS_SECONDS) {
-    zoneInZone = false;
-  } else if (!zoneInZone && rounded > ZONE_THRESHOLD_SECONDS + ZONE_HYSTERESIS_SECONDS) {
-    zoneInZone = true;
-  }
-  // Otherwise the value is inside the dead zone -- keep the previous state.
+  zoneState = nextZoneState(rounded, zoneState);
 
-  const zoneClass = zoneInZone ? "in-zone" : "out-of-zone";
-
-  zoneStateEl.textContent = zoneInZone ? "SPEED STILL HELPS" : "SPEED WON'T HELP";
-  zoneStateEl.className = "zone-state " + zoneClass;
+  zoneStateEl.textContent = ZONE_STATE_LABELS[zoneState];
+  zoneStateEl.className = "zone-state " + zoneState;
   zoneValueEl.textContent = formatDuration(rounded);
-  zoneValueEl.className = "zone-value " + zoneClass;
-  zoneIndicatorEl.className = "zone-indicator " + zoneClass;
+  zoneValueEl.className = "zone-value " + zoneState;
+  zoneIndicatorEl.className = "zone-indicator " + zoneState;
 
   // Core Loop "state confirmed" cue: a brief flash the moment the state
-  // actually flips, so a change registers even mid-glance instead of
+  // actually changes, so a change registers even mid-glance instead of
   // relying on the driver to notice a continuously-updating number.
-  const stateChanged = previousInZone !== null && previousInZone !== zoneInZone;
+  const stateChanged = previousZoneState !== null && previousZoneState !== zoneState;
   if (stateChanged) {
     // Force a reflow between removing and re-adding the class so the
     // keyframe animation restarts even if it's still finishing from a
@@ -182,26 +219,30 @@ function setZoneDisplay(marginalSeconds) {
   }
 }
 
-function formatSignedDuration(totalSeconds) {
-  const sign = totalSeconds < 0 ? "-" : "+";
-  const abs = Math.round(Math.abs(totalSeconds));
-  if (abs < 60) return `${sign}${abs}s`;
-  const minutes = Math.floor(abs / 60);
-  const seconds = abs % 60;
-  return `${sign}${minutes}:${String(seconds).padStart(2, "0")}`;
-}
-
-function setTripTimeSavedDisplay(deltaSeconds) {
-  if (deltaSeconds === null) {
-    tripTimeSavedEl.textContent = "";
-    tripTimeSavedEl.className = "trip-time-saved";
-    return;
-  }
-
-  const rounded = Math.round(deltaSeconds);
-  const zone = rounded > 0 ? "ahead" : rounded < 0 ? "behind" : "";
-  tripTimeSavedEl.textContent = `Trip: ${formatSignedDuration(rounded)} vs ${TRIP_BASELINE_SPEED_MPH}mph`;
-  tripTimeSavedEl.className = "trip-time-saved" + (zone ? " " + zone : "");
+// Live in-trip readout (2026-07-15 revision): replaces the old "vs 55mph"
+// baseline comparison, which had gone inconsistent with the zone-based
+// framing the end-of-trip summary uses (see showTripSummary below). This is
+// a running version of the exact same stat -- % of trip so far spent where
+// speed still meaningfully helps (zoneState !== "red") -- so the live number
+// and the end-of-trip number are now the same metric at two points in time,
+// not two different framings. Neutral color, same reasoning as the summary:
+// a trailing average isn't the live signal to act on (the zone indicator
+// above it already is), so no good/bad color treatment.
+//
+// Second line added same day, later: the percentage alone doesn't say how
+// much time that translates to, and the end-of-trip summary was reworked to
+// lead with a concrete seconds value for exactly that reason (see
+// showTripSummary's revision note) -- so the live readout gets a running
+// version of that same number underneath, computed the same way
+// (secondsBehindPace in recordSample, same formula as endTrip's
+// secondsBehindPace). The two lines are two views of the same underlying
+// zone-tracking data (trip.inZoneSeconds/trip.inZoneMiles), not two
+// different metrics.
+function setTripZoneProgressDisplay(pctInZone, secondsBehindPace) {
+  tripZoneProgressEl.textContent =
+    pctInZone === null ? "" : `${Math.round(pctInZone)}% of trip in zone so far`;
+  tripZoneProgressTimeEl.textContent =
+    secondsBehindPace === null ? "" : `${formatDuration(secondsBehindPace)} behind the fastest pace so far`;
 }
 
 function haversineMeters(a, b) {
@@ -230,19 +271,33 @@ function recordSample(mph, timestamp) {
     trip.distanceMiles += mph * hours;
 
     // Accessory Feature: percentage of the trip spent in the zone (speed
-    // still helps) vs out of it (diminishing returns) -- the same
-    // hysteresis-corrected state the live Core Function display already
-    // computed for this exact sample (setZoneDisplay runs before
-    // recordSample in handlePosition, so zoneInZone is current). Populates
-    // the pct_time_in_zone column that's existed in the schema since the
-    // baseline migration but was always left null. Time below
-    // PACE_MIN_SPEED_MPH has no defined zone state (zoneInZone is null
+    // still meaningfully helps -- zoneState is "green" or "yellow", the
+    // 60s/~73mph threshold, not the cosmetic 120s/~50mph green/yellow split)
+    // vs out of it (red, diminishing returns) -- the same hysteresis-
+    // corrected state the live Core Function display already computed for
+    // this exact sample (setZoneDisplay runs before recordSample in
+    // handlePosition, so zoneState is current). Populates the
+    // pct_time_in_zone column that's existed in the schema since the
+    // baseline migration but was always left null, and also drives the live
+    // in-trip readout (setTripZoneProgressDisplay below). Time below
+    // PACE_MIN_SPEED_MPH has no defined zone state (zoneState is null
     // there), so it's excluded from both sides of the ratio rather than
     // silently counted as "out of zone".
+    //
+    // inZoneMiles is the same gate applied to distance instead of time --
+    // miles covered specifically while zoneState wasn't "red" -- so the
+    // end-of-trip summary (see endTrip/zoneCeilingMph) can compare actual
+    // time spent covering those miles to the ideal time at the zone ceiling
+    // speed, rather than penalizing the whole trip (including necessary
+    // acceleration from a stop, or miles already driven at/above the
+    // ceiling) the way a flat percentage does.
     const seconds = (timestamp - trip.lastSampleTimestamp) / 1000;
-    if (zoneInZone !== null) {
+    if (zoneState !== null) {
       trip.trackedSeconds += seconds;
-      if (zoneInZone) trip.inZoneSeconds += seconds;
+      if (zoneState !== "red") {
+        trip.inZoneSeconds += seconds;
+        trip.inZoneMiles += mph * hours;
+      }
     }
   }
   trip.lastSampleTimestamp = timestamp;
@@ -263,10 +318,33 @@ function recordSample(mph, timestamp) {
     trip.paceSampleCount += 1;
   }
 
-  const elapsedSeconds = (timestamp - trip.startedAt.getTime()) / 1000;
-  const baselineSeconds = (trip.distanceMiles / TRIP_BASELINE_SPEED_MPH) * 3600;
-  setTripTimeSavedDisplay(baselineSeconds - elapsedSeconds);
+  const pctInZoneSoFar =
+    trip.trackedSeconds > 0 ? (trip.inZoneSeconds / trip.trackedSeconds) * 100 : null;
+
+  // Running version of endTrip's secondsBehindPace -- same formula, same
+  // exclusion of red (already-at-ceiling) time from both sides.
+  const idealSecondsForInZoneMilesSoFar =
+    trip.inZoneMiles > 0 ? (trip.inZoneMiles / zoneCeilingMph()) * 3600 : 0;
+  const secondsBehindPaceSoFar =
+    trip.trackedSeconds > 0 ? Math.max(0, trip.inZoneSeconds - idealSecondsForInZoneMilesSoFar) : null;
+
+  setTripZoneProgressDisplay(pctInZoneSoFar, secondsBehindPaceSoFar);
 }
+
+// Real GPS chips (any phone) report coords.speed directly and reliably, so
+// the Haversine fallback below almost never runs on a real device. Desktop
+// browsers have no GPS chip: coords.speed is essentially always null, so
+// dev-server testing always exercises the fallback. Wi-Fi/IP-based desktop
+// positioning is coarse (accuracy is routinely hundreds to thousands of
+// meters) and jumps between refreshes -- a large apparent jump divided by a
+// small time delta produces a physically impossible speed with nothing to
+// catch it. Two guards, both defense-in-depth on a real phone too (a cold
+// GPS fix right after opening the app can have poor accuracy briefly):
+// MAX_FIX_ACCURACY_METERS refuses to remember a fix as "last known position"
+// if it's too imprecise to trust for a distance delta, and MAX_PLAUSIBLE_MPH
+// refuses to display/record a resulting speed no real car could reach.
+const MAX_FIX_ACCURACY_METERS = 100;
+const MAX_PLAUSIBLE_MPH = 200;
 
 function handlePosition(position) {
   setStatus("live", "live");
@@ -288,14 +366,21 @@ function handlePosition(position) {
     }
   }
 
-  if (mph !== null) {
+  if (mph !== null && mph <= MAX_PLAUSIBLE_MPH) {
     setSpeedDisplay(mph);
     setPaceDisplay(mph);
     setZoneDisplay(marginalSecondsSaved(mph));
     recordSample(mph, timestamp);
   }
 
-  lastPosition = { coords, timestamp };
+  // Only remember this fix as "last known position" if it's accurate enough
+  // to trust for the next fallback delta -- coords.accuracy is undefined on
+  // the simulated-drive dev tool's synthetic fixes (never used with the
+  // fallback path anyway, since those always set coords.speed directly), so
+  // that case is let through rather than silently disabling the tool.
+  if (coords.accuracy === undefined || coords.accuracy <= MAX_FIX_ACCURACY_METERS) {
+    lastPosition = { coords, timestamp };
+  }
 }
 
 function handleError(error) {
@@ -356,33 +441,49 @@ function startTrip() {
     paceSampleCount: 0,
     trackedSeconds: 0,
     inZoneSeconds: 0,
+    inZoneMiles: 0,
   };
   recording = true;
   tripBtn.textContent = "End Trip";
   tripStatusEl.textContent = "Recording…";
-  setTripTimeSavedDisplay(null);
+  setTripZoneProgressDisplay(null, null);
 }
 
 // Accessory Feature: the end-of-trip summary. Per research_plan.qmd's own
 // framing of "percentage of trip time spent inside the optimal zone" as the
 // primary outcome metric, and per the professor-meeting steer to lead with
 // the time-savings zone rather than a speed-limit or baseline-speed
-// comparison, this is deliberately just the one number -- no "vs Xmph"
-// figure, no historical trends, nothing about the car. Inline swap within
-// the existing dashboard for this pass rather than a fourth screen; Surface
-// Area Check (next pipeline stage) is where the screen count itself gets
-// decided.
-function showTripSummary(pctInZone, distanceMiles, elapsedSeconds) {
+// comparison, this is deliberately just the one number -- no historical
+// trends, nothing about the car. Inline swap within the existing dashboard
+// for this pass rather than a fourth screen; Surface Area Check (next
+// pipeline stage) is where the screen count itself gets decided.
+//
+// 2026-07-15 revision: the original version of this screen showed a flat
+// "% of trip, more speed would have helped" -- which, on a highway-speed
+// trip that spent the whole time at or near the ~73mph zone ceiling, came
+// out as "100%, more speed would have helped." That's arithmetically
+// consistent with the zone definition, but it reads as an instruction to
+// speed up past highway speeds, which is the opposite of the app's point,
+// and it doesn't distinguish "you barely left any time on the table" from
+// "you drove well under an efficient pace the whole trip." secondsBehindPace
+// (computed in endTrip via zoneCeilingMph) replaces the percentage with a
+// concrete number: actual seconds spent, specifically during the portion of
+// the trip where going faster would still have helped, above what the same
+// distance would have taken at the zone ceiling speed. A trip spent mostly
+// at/near the ceiling (like a normal highway drive) now shows a small
+// number; a trip spent well under an efficient pace shows a larger one --
+// see README's "How the pace/zone math works" for the full derivation.
+function showTripSummary(secondsBehindPace, distanceMiles, elapsedSeconds) {
   readoutEl.classList.add("hidden");
   tripControlsEl.classList.add("hidden");
   tripSummaryEl.classList.remove("hidden");
 
-  if (pctInZone === null) {
+  if (secondsBehindPace === null) {
     tripSummaryValueEl.textContent = "--";
     tripSummaryCaptionEl.textContent = "not enough data this trip";
   } else {
-    tripSummaryValueEl.textContent = `${Math.round(pctInZone)}%`;
-    tripSummaryCaptionEl.textContent = "of this trip, more speed would have helped";
+    tripSummaryValueEl.textContent = formatDuration(secondsBehindPace);
+    tripSummaryCaptionEl.textContent = "behind the fastest pace that would have helped";
   }
 
   const miles = distanceMiles.toFixed(1);
@@ -406,12 +507,31 @@ async function endTrip() {
   tripBtn.disabled = true;
   tripStatusEl.textContent = "";
 
+  // pct_time_in_zone: still computed and still saved to Supabase below (the
+  // literature-adjacent 60s/~73mph threshold hasn't changed, and this
+  // number is useful for research analysis), just no longer the headline UI
+  // number -- see showTripSummary's comment for why.
   const pctInZone =
     finishedTrip.trackedSeconds > 0
       ? (finishedTrip.inZoneSeconds / finishedTrip.trackedSeconds) * 100
       : null;
+
+  // Ideal time to cover finishedTrip.inZoneMiles at the zone ceiling speed,
+  // vs. the actual time spent covering those same miles -- see
+  // zoneCeilingMph's comment and showTripSummary's 2026-07-15 revision note.
+  // Clamped at 0: floating-point rounding on the boundary samples could
+  // otherwise produce a tiny negative value.
+  const idealSecondsForInZoneMiles =
+    finishedTrip.inZoneMiles > 0
+      ? (finishedTrip.inZoneMiles / zoneCeilingMph()) * 3600
+      : 0;
+  const secondsBehindPace =
+    finishedTrip.trackedSeconds > 0
+      ? Math.max(0, finishedTrip.inZoneSeconds - idealSecondsForInZoneMiles)
+      : null;
+
   const elapsedSeconds = (Date.now() - finishedTrip.startedAt.getTime()) / 1000;
-  showTripSummary(pctInZone, finishedTrip.distanceMiles, elapsedSeconds);
+  showTripSummary(secondsBehindPace, finishedTrip.distanceMiles, elapsedSeconds);
   tripSummarySaveStatusEl.textContent = "Saving…";
 
   const {
@@ -462,30 +582,94 @@ tripBtn.addEventListener("click", () => {
 // real GPS, so the whole speed/pace/trip-recording pipeline can be exercised
 // indoors without driving.
 //
-// REMOVE this whole block (and the button + its CSS/HTML) before shipping
-// the app to real study participants -- see CLAUDE.md pre-launch checklist.
-// It has no reason to exist outside local dev testing.
+// REMOVE this whole block (and the dropdown/button/progress bar CSS/HTML)
+// before shipping the app to real study participants -- see CLAUDE.md
+// pre-launch checklist. It has no reason to exist outside local dev testing.
 
-// Elapsed-seconds -> target mph, piecewise linear. Shape is: stopped, ramp
-// all the way up to 120 (well past any real-world legal speed, but useful
-// for seeing the full pace curve flatten out), cruise, slow to a 25mph
-// surface street, cruise, stop. Not real physics -- just enough shape to
-// move speed/pace through their full range so the UI can be sanity-checked
-// visually.
-const SIMULATED_DRIVE_PROFILE = [
-  { untilSecond: 5, toMph: 0 },
-  { untilSecond: 35, toMph: 120 },
-  { untilSecond: 55, toMph: 120 },
-  { untilSecond: 70, toMph: 25 },
-  { untilSecond: 90, toMph: 25 },
-  { untilSecond: 100, toMph: 0 },
-  { untilSecond: 105, toMph: 0 },
-];
+// Elapsed-seconds -> target mph, piecewise linear, per profile. Not real
+// physics -- just enough shape per driving context to move speed/pace/zone
+// through realistic ranges so the UI (including hysteresis/flash behavior
+// and pct_time_in_zone) can be sanity-checked visually across contexts, not
+// just on one synthetic full-range ramp.
+const SIMULATED_DRIVE_PROFILES = {
+  // Original profile: stopped, ramp all the way up to 120 (well past any
+  // real-world legal speed, but useful for seeing the full pace curve
+  // flatten out), cruise, slow to a 25mph surface street, cruise, stop.
+  full: [
+    { untilSecond: 5, toMph: 0 },
+    { untilSecond: 35, toMph: 120 },
+    { untilSecond: 55, toMph: 120 },
+    { untilSecond: 70, toMph: 25 },
+    { untilSecond: 90, toMph: 25 },
+    { untilSecond: 100, toMph: 0 },
+    { untilSecond: 105, toMph: 0 },
+  ],
+  // 15-25mph with full stop-sign-style stops between each block.
+  residential: [
+    { untilSecond: 4, toMph: 0 },
+    { untilSecond: 10, toMph: 22 },
+    { untilSecond: 22, toMph: 22 },
+    { untilSecond: 26, toMph: 0 },
+    { untilSecond: 32, toMph: 18 },
+    { untilSecond: 46, toMph: 18 },
+    { untilSecond: 50, toMph: 0 },
+    { untilSecond: 56, toMph: 25 },
+    { untilSecond: 68, toMph: 25 },
+    { untilSecond: 72, toMph: 0 },
+    { untilSecond: 76, toMph: 0 },
+  ],
+  // 20-35mph stop-and-go: some lights slow it without a full stop, others do.
+  innerCity: [
+    { untilSecond: 5, toMph: 0 },
+    { untilSecond: 12, toMph: 30 },
+    { untilSecond: 20, toMph: 30 },
+    { untilSecond: 24, toMph: 10 },
+    { untilSecond: 30, toMph: 35 },
+    { untilSecond: 40, toMph: 35 },
+    { untilSecond: 44, toMph: 0 },
+    { untilSecond: 50, toMph: 25 },
+    { untilSecond: 62, toMph: 25 },
+    { untilSecond: 66, toMph: 20 },
+    { untilSecond: 76, toMph: 20 },
+    { untilSecond: 80, toMph: 0 },
+    { untilSecond: 84, toMph: 0 },
+  ],
+  // 65-80mph sustained, gradual changes, minimal stopping (on/off ramps only).
+  highway: [
+    { untilSecond: 8, toMph: 0 },
+    { untilSecond: 25, toMph: 70 },
+    { untilSecond: 50, toMph: 70 },
+    { untilSecond: 60, toMph: 80 },
+    { untilSecond: 80, toMph: 80 },
+    { untilSecond: 95, toMph: 65 },
+    { untilSecond: 115, toMph: 65 },
+    { untilSecond: 125, toMph: 75 },
+    { untilSecond: 140, toMph: 75 },
+    { untilSecond: 155, toMph: 0 },
+    { untilSecond: 160, toMph: 0 },
+  ],
+  // 45-60mph sustained, with occasional faster passing bursts.
+  rural: [
+    { untilSecond: 6, toMph: 0 },
+    { untilSecond: 16, toMph: 50 },
+    { untilSecond: 40, toMph: 50 },
+    { untilSecond: 48, toMph: 60 },
+    { untilSecond: 60, toMph: 60 },
+    { untilSecond: 68, toMph: 45 },
+    { untilSecond: 90, toMph: 45 },
+    { untilSecond: 98, toMph: 58 },
+    { untilSecond: 112, toMph: 58 },
+    { untilSecond: 122, toMph: 50 },
+    { untilSecond: 140, toMph: 50 },
+    { untilSecond: 148, toMph: 0 },
+    { untilSecond: 152, toMph: 0 },
+  ],
+};
 
-function simulatedMphAtSecond(second) {
+function simulatedMphAtSecond(second, profile) {
   let previousUntil = 0;
   let previousMph = 0;
-  for (const phase of SIMULATED_DRIVE_PROFILE) {
+  for (const phase of profile) {
     if (second <= phase.untilSecond) {
       const phaseDuration = phase.untilSecond - previousUntil;
       const progress =
@@ -504,9 +688,9 @@ function startSimulatedDrive() {
   if (simulationInterval !== null) return;
   stopWatching();
 
+  const profile = SIMULATED_DRIVE_PROFILES[simulateProfileEl.value];
   const startedAt = Date.now();
-  const totalDuration =
-    SIMULATED_DRIVE_PROFILE[SIMULATED_DRIVE_PROFILE.length - 1].untilSecond;
+  const totalDuration = profile[profile.length - 1].untilSecond;
 
   simulationInterval = setInterval(() => {
     const elapsedSeconds = (Date.now() - startedAt) / 1000;
@@ -514,7 +698,7 @@ function startSimulatedDrive() {
       stopSimulatedDrive();
       return;
     }
-    const mph = simulatedMphAtSecond(elapsedSeconds);
+    const mph = simulatedMphAtSecond(elapsedSeconds, profile);
     // Fake, fixed coordinates -- never real device location, and (like real
     // fixes) never sent anywhere; only the derived mph leaves handlePosition.
     handlePosition({
@@ -524,6 +708,7 @@ function startSimulatedDrive() {
     simulateProgressFillEl.style.width = `${Math.min(elapsedSeconds / totalDuration, 1) * 100}%`;
   }, 1000);
 
+  simulateProfileEl.disabled = true;
   simulateBtn.textContent = "Stop Simulated Drive";
   simulateProgressEl.classList.remove("hidden");
   simulateProgressFillEl.style.width = "0%";
@@ -534,6 +719,7 @@ function stopSimulatedDrive() {
   clearInterval(simulationInterval);
   simulationInterval = null;
   lastPosition = null;
+  simulateProfileEl.disabled = false;
   simulateBtn.textContent = "Start Simulated Drive";
   simulateProgressEl.classList.add("hidden");
   simulateProgressFillEl.style.width = "0%";
@@ -562,6 +748,7 @@ export function stopApp() {
   if (simulationInterval !== null) {
     clearInterval(simulationInterval);
     simulationInterval = null;
+    simulateProfileEl.disabled = false;
     simulateBtn.textContent = "Start Simulated Drive";
     simulateProgressEl.classList.add("hidden");
     simulateProgressFillEl.style.width = "0%";
@@ -570,6 +757,6 @@ export function stopApp() {
   trip = null;
   tripBtn.textContent = "Start Trip";
   tripStatusEl.textContent = "";
-  setTripTimeSavedDisplay(null);
+  setTripZoneProgressDisplay(null, null);
   hideTripSummary();
 }

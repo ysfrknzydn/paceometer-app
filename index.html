@@ -63,12 +63,22 @@
     <div id="trip-controls" class="trip-controls">
       <button id="trip-btn" class="trip-btn" type="button">Start Trip</button>
       <div id="trip-status" class="trip-status"></div>
-      <div id="trip-time-saved" class="trip-time-saved"></div>
+      <div id="trip-zone-progress" class="trip-zone-progress"></div>
+      <div id="trip-zone-progress-time" class="trip-zone-progress-time"></div>
       <!-- Dev tool for testing indoors without driving. Remove this block
-           (button + progress bar) along with its app.js code (search
-           "DEV TOOL") before shipping to real study participants -- see
-           CLAUDE.md pre-launch checklist. -->
-      <button id="simulate-btn" class="simulate-btn" type="button">Start Simulated Drive</button>
+           (dropdown + button + progress bar) along with its app.js code
+           (search "DEV TOOL") before shipping to real study participants --
+           see CLAUDE.md pre-launch checklist. -->
+      <div id="simulate-controls" class="simulate-controls">
+        <select id="simulate-profile" class="simulate-profile">
+          <option value="full">Full range</option>
+          <option value="residential">Residential</option>
+          <option value="innerCity">Inner city</option>
+          <option value="highway">Highway</option>
+          <option value="rural">Rural</option>
+        </select>
+        <button id="simulate-btn" class="simulate-btn" type="button">Start Simulated Drive</button>
+      </div>
       <div id="simulate-progress" class="simulate-progress hidden">
         <div id="simulate-progress-fill" class="simulate-progress-fill"></div>
       </div>
