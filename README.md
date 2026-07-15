@@ -6,10 +6,10 @@ A real-time in-car pace/speed display, built as a Progressive Web App. Part of a
 
 - Reads live GPS speed from the browser's Geolocation API and displays it full-screen, in either portrait or landscape (works mounted either way on a dash).
 - Shows a live pace readout (minutes required to cover 10 miles at the current speed) alongside speed — the debiasing display from Peer & Gamliel (2013).
-- A "time saved" gauge — a color-coded horizontal bar plus a bold label (SAVING TIME / BARELY HELPING / NO REAL GAIN / LOSING TIME) comparing your pace right now to your pace 10 seconds ago, so the diminishing returns of extra speed are visible at a glance instead of buried in a number.
+- A zone indicator that answers the app's core question at a glance: at your current speed, would going 10mph faster still save meaningful time? A bold state word (SPEED STILL HELPS / SPEED WON'T HELP) plus a big color-matched number, with hysteresis so GPS noise near the ~73mph boundary can't make it flicker, and a brief flash the moment the state actually changes.
 - A second, trip-wide "time saved" readout that updates continuously while a trip is recording, comparing actual elapsed time to a baseline reference speed.
 - Email/password sign-in (Supabase Auth).
-- Start/End Trip button that records average/min/max speed, distance, sample count, and average pace for the session, and saves it to a Supabase database, tied to the signed-in user.
+- Start/End Trip button that records average/min/max speed, distance, sample count, average pace, and percentage of the trip spent in the zone, saving it to a Supabase database tied to the signed-in user. Ending a trip shows an end-of-trip summary (just the zone percentage — no historical trends, no vs-speed comparison) before returning to the live view.
 - A "Start Simulated Drive" dev tool for testing the whole display indoors, without a car — feeds a synthetic 0→120mph drive through the same code path as real GPS. Needs to be removed before this app goes to real study participants (see `CLAUDE.md`).
 - No raw location (latitude/longitude) is ever sent off the device — only derived speed/pace/distance metrics.
 
@@ -76,4 +76,4 @@ Pushing to `main` is enough — GitHub Pages serves directly from the repo root 
 
 ## Status
 
-Early-stage proof of concept. The "time saved" gauge and trip-wide readout are a first pass at the "optimal zone" idea from the research plan — a marginal-time-savings signal, not yet a literature-validated feature, so their thresholds and the trip-wide readout's baseline speed are this project's own design choices, not borrowed from a paper (see `CLAUDE.md`). `pct_time_in_zone` in the trips table is still unused — nothing is written to it yet.
+Early-stage proof of concept, built against the 5-stage MVP funnel in the research plan (Core Function → Core Loop → Accessory Features → Surface Area Check → Retention Hook). The first three stages are done: the zone indicator (Core Function/Loop) and the end-of-trip summary (Accessory Features, now writing real values to `pct_time_in_zone`). Surface Area Check and Retention Hook are next — see `TODO.md`. The zone threshold and the trip-wide readout's baseline speed are this project's own design choices, not borrowed from a paper (see `CLAUDE.md`).

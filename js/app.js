@@ -3,12 +3,21 @@ import { supabase } from "./supabaseClient.js";
 const statusEl = document.getElementById("status");
 const speedEl = document.getElementById("speed");
 const paceEl = document.getElementById("pace");
-const timeSavedLabelEl = document.getElementById("time-saved-label");
-const timeSavedFillEl = document.getElementById("time-saved-fill");
-const timeSavedDetailEl = document.getElementById("time-saved-detail");
+const zoneIndicatorEl = document.getElementById("zone-indicator");
+const zoneStateEl = document.getElementById("zone-state");
+const zoneValueEl = document.getElementById("zone-value");
+const zoneCaptionEl = document.getElementById("zone-caption");
+const readoutEl = document.getElementById("readout");
+const tripControlsEl = document.getElementById("trip-controls");
 const tripBtn = document.getElementById("trip-btn");
 const tripStatusEl = document.getElementById("trip-status");
 const tripTimeSavedEl = document.getElementById("trip-time-saved");
+const tripSummaryEl = document.getElementById("trip-summary");
+const tripSummaryValueEl = document.getElementById("trip-summary-value");
+const tripSummaryCaptionEl = document.getElementById("trip-summary-caption");
+const tripSummaryDetailEl = document.getElementById("trip-summary-detail");
+const tripSummarySaveStatusEl = document.getElementById("trip-summary-save-status");
+const tripSummaryDismissBtn = document.getElementById("trip-summary-dismiss");
 const simulateBtn = document.getElementById("simulate-btn");
 const simulateProgressEl = document.getElementById("simulate-progress");
 const simulateProgressFillEl = document.getElementById("simulate-progress-fill");
@@ -24,23 +33,6 @@ const MPS_TO_MPH = 2.23694;
 const PACE_REFERENCE_MILES = 10;
 const PACE_MIN_SPEED_MPH = 5;
 
-// "Time saved vs N seconds ago" -- a rolling comparison of the current pace
-// against the pace from a few seconds back, which is where the pace curve's
-// concavity actually becomes visible/felt while driving (per the professor
-// conversation about the psychological "decreasing slope" effect). The
-// significant/diminishing/negligible buckets below are this project's own
-// visualization heuristic, not a literature-derived threshold -- see
-// CLAUDE.md's note on the "optimal zone" being an unresolved design
-// extension, not a cited finding.
-const TIME_SAVED_WINDOW_MS = 10_000;
-const TIME_SAVED_SIGNIFICANT_SECONDS = 5;
-const TIME_SAVED_NEGLIGIBLE_SECONDS = 1;
-// Visual clamp for the gauge bar: a delta at or beyond this magnitude fills
-// the bar all the way to its end. Past this point the exact number stops
-// being the point -- the bar has already said "yes/no" at a glance -- so
-// there's no reason to keep stretching it further.
-const TIME_SAVED_BAR_MAX_SECONDS = 30;
-
 // Ongoing "time saved this trip": (time the distance driven so far would
 // take at this baseline speed) minus (actual elapsed trip time). 55 mph is
 // a placeholder round number, not a specific speed limit or a
@@ -50,11 +42,18 @@ const TIME_SAVED_BAR_MAX_SECONDS = 30;
 // only used for this live display, and isn't written to Supabase -- the
 // trip's distance_miles/started_at/ended_at columns already let any
 // baseline be applied retroactively during analysis.
+//
+// NOTE: this predates the professor-meeting steer (2026-07-15) to lead with
+// the zone concept rather than a baseline-speed comparison -- the newer
+// end-of-trip summary (see showTripSummary/pct_time_in_zone below)
+// deliberately avoids a "vs Xmph" framing for that reason. This live
+// readout still uses one, so it's now inconsistent with the summary it
+// sits right next to. Left alone for this pass since it wasn't in today's
+// requested scope, but worth resolving together rather than separately.
 const TRIP_BASELINE_SPEED_MPH = 55;
 
 let watchId = null;
 let lastPosition = null;
-let speedHistory = []; // { t: timestamp, mph } samples from roughly the last TIME_SAVED_WINDOW_MS
 
 let recording = false;
 let trip = null; // { startedAt, sampleCount, speedSum, maxSpeed }
@@ -85,6 +84,104 @@ function paceSecondsFor(mph) {
   return mph >= PACE_MIN_SPEED_MPH ? (PACE_REFERENCE_MILES / mph) * 3600 : null;
 }
 
+// Core Function: at the current speed, would going ZONE_SPEED_INCREMENT_MPH
+// faster still buy meaningful time over PACE_REFERENCE_MILES? This is the
+// exact hyperbola argument from paceometer_review.qmd's own illustrative
+// tool (time_min - time_at_plus10) -- +10mph is chosen specifically because
+// it matches that report's worked examples (20->30mph saves 10.0min,
+// 70->80mph saves ~1.1min), so the app's numbers are directly checkable
+// against the report's. Per research_plan.qmd's open-questions note, "the
+// zone" is defined against this fixed reference speed rather than the
+// posted speed limit -- a speed-limit lookup has no free tier that fits a
+// zero-budget summer, and a fixed reference is the explicitly-chosen
+// default for this phase. ZONE_THRESHOLD_SECONDS is this project's own
+// design choice (not literature-derived, confirmed with the professor's
+// collaborator) for what counts as "meaningful": 60s puts the zone boundary
+// around ~73mph, so ordinary highway cruising still reads as "still helps"
+// and only clearly-speeding territory reads as diminishing returns.
+const ZONE_SPEED_INCREMENT_MPH = 10;
+const ZONE_THRESHOLD_SECONDS = 60;
+
+// Core Loop: "display confirms the new state" only means something if the
+// state is trustworthy. Right at the ~73mph boundary, GPS speed noise alone
+// (routinely 1-2mph) moves the marginal-seconds value by a few seconds --
+// enough to flip the raw threshold back and forth on consecutive fixes if
+// you're cruising near it, which is a very normal place to sit on a
+// highway. This hysteresis band means the state only flips once the value
+// clears the threshold by ZONE_HYSTERESIS_SECONDS in the new direction, so
+// noise near the boundary can't retrigger a flip -- confirmed with the
+// professor's collaborator, not a literature-derived number.
+const ZONE_HYSTERESIS_SECONDS = 10;
+
+zoneCaptionEl.textContent = `time saved at +${ZONE_SPEED_INCREMENT_MPH}mph`;
+
+let zoneInZone = null; // null until the first valid reading
+
+function marginalSecondsSaved(mph) {
+  const now = paceSecondsFor(mph);
+  if (now === null) return null;
+  const faster = paceSecondsFor(mph + ZONE_SPEED_INCREMENT_MPH);
+  return now - faster;
+}
+
+function formatDuration(totalSeconds) {
+  const abs = Math.max(0, Math.round(totalSeconds));
+  if (abs < 60) return `${abs}s`;
+  const minutes = Math.floor(abs / 60);
+  const seconds = abs % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+// Same exact numbers as before (marginal seconds saved by +10mph over
+// 10mi), just restructured for a faster read: a big color-coded number
+// carries the magnitude, so the driver doesn't have to parse a sentence to
+// get it -- the state word alone answers "does it help", the number answers
+// "by how much", both readable well within the NHTSA 2s glance guideline.
+function setZoneDisplay(marginalSeconds) {
+  const previousInZone = zoneInZone;
+
+  if (marginalSeconds === null) {
+    zoneInZone = null;
+    zoneStateEl.textContent = "--";
+    zoneStateEl.className = "zone-state";
+    zoneValueEl.textContent = "--";
+    zoneValueEl.className = "zone-value";
+    zoneIndicatorEl.className = "zone-indicator";
+    return;
+  }
+
+  const rounded = Math.round(marginalSeconds);
+  if (zoneInZone === null) {
+    zoneInZone = rounded >= ZONE_THRESHOLD_SECONDS;
+  } else if (zoneInZone && rounded < ZONE_THRESHOLD_SECONDS - ZONE_HYSTERESIS_SECONDS) {
+    zoneInZone = false;
+  } else if (!zoneInZone && rounded > ZONE_THRESHOLD_SECONDS + ZONE_HYSTERESIS_SECONDS) {
+    zoneInZone = true;
+  }
+  // Otherwise the value is inside the dead zone -- keep the previous state.
+
+  const zoneClass = zoneInZone ? "in-zone" : "out-of-zone";
+
+  zoneStateEl.textContent = zoneInZone ? "SPEED STILL HELPS" : "SPEED WON'T HELP";
+  zoneStateEl.className = "zone-state " + zoneClass;
+  zoneValueEl.textContent = formatDuration(rounded);
+  zoneValueEl.className = "zone-value " + zoneClass;
+  zoneIndicatorEl.className = "zone-indicator " + zoneClass;
+
+  // Core Loop "state confirmed" cue: a brief flash the moment the state
+  // actually flips, so a change registers even mid-glance instead of
+  // relying on the driver to notice a continuously-updating number.
+  const stateChanged = previousInZone !== null && previousInZone !== zoneInZone;
+  if (stateChanged) {
+    // Force a reflow between removing and re-adding the class so the
+    // keyframe animation restarts even if it's still finishing from a
+    // previous flip.
+    zoneIndicatorEl.classList.remove("zone-flash");
+    void zoneIndicatorEl.offsetWidth;
+    zoneIndicatorEl.classList.add("zone-flash");
+  }
+}
+
 function formatSignedDuration(totalSeconds) {
   const sign = totalSeconds < 0 ? "-" : "+";
   const abs = Math.round(Math.abs(totalSeconds));
@@ -92,53 +189,6 @@ function formatSignedDuration(totalSeconds) {
   const minutes = Math.floor(abs / 60);
   const seconds = abs % 60;
   return `${sign}${minutes}:${String(seconds).padStart(2, "0")}`;
-}
-
-function setTimeSavedDisplay(deltaSeconds) {
-  if (deltaSeconds === null) {
-    timeSavedLabelEl.textContent = "--";
-    timeSavedLabelEl.className = "time-saved-label";
-    timeSavedFillEl.className = "time-saved-fill";
-    timeSavedFillEl.style.width = "0%";
-    timeSavedDetailEl.textContent = "";
-    return;
-  }
-
-  const rounded = Math.round(deltaSeconds);
-  let zone, label;
-  if (rounded >= TIME_SAVED_SIGNIFICANT_SECONDS) {
-    zone = "significant";
-    label = "Saving time";
-  } else if (rounded > TIME_SAVED_NEGLIGIBLE_SECONDS) {
-    zone = "diminishing";
-    label = "Barely helping";
-  } else if (rounded >= -TIME_SAVED_NEGLIGIBLE_SECONDS) {
-    zone = "negligible";
-    label = "No real gain";
-  } else {
-    zone = "losing";
-    label = "Losing time";
-  }
-
-  // Bar extends right of center when gaining time, left when losing it.
-  // Clamped to TIME_SAVED_BAR_MAX_SECONDS so one wild reading can't push the
-  // fill off-track; a small minimum width keeps it visible even near zero.
-  const clamped = Math.max(
-    -TIME_SAVED_BAR_MAX_SECONDS,
-    Math.min(TIME_SAVED_BAR_MAX_SECONDS, rounded)
-  );
-  const halfPercent = Math.max(
-    (Math.abs(clamped) / TIME_SAVED_BAR_MAX_SECONDS) * 50,
-    1.5
-  );
-
-  timeSavedFillEl.className = "time-saved-fill " + zone;
-  timeSavedFillEl.style.width = `${halfPercent}%`;
-  timeSavedFillEl.style.left = clamped >= 0 ? "50%" : `${50 - halfPercent}%`;
-
-  timeSavedLabelEl.textContent = label.toUpperCase();
-  timeSavedLabelEl.className = "time-saved-label " + zone;
-  timeSavedDetailEl.textContent = `${formatSignedDuration(rounded)} vs 10s ago`;
 }
 
 function setTripTimeSavedDisplay(deltaSeconds) {
@@ -152,33 +202,6 @@ function setTripTimeSavedDisplay(deltaSeconds) {
   const zone = rounded > 0 ? "ahead" : rounded < 0 ? "behind" : "";
   tripTimeSavedEl.textContent = `Trip: ${formatSignedDuration(rounded)} vs ${TRIP_BASELINE_SPEED_MPH}mph`;
   tripTimeSavedEl.className = "trip-time-saved" + (zone ? " " + zone : "");
-}
-
-// Live, continuous -- runs whenever signed in, independent of trip
-// recording, same as the speed/pace readout itself.
-function updateTimeSaved(mph, timestamp) {
-  speedHistory.push({ t: timestamp, mph });
-
-  const targetTime = timestamp - TIME_SAVED_WINDOW_MS;
-  // Advance past samples that are older than we need -- keep only the
-  // oldest sample at-or-before targetTime plus everything newer.
-  while (speedHistory.length > 1 && speedHistory[1].t <= targetTime) {
-    speedHistory.shift();
-  }
-
-  if (speedHistory[0].t > targetTime) {
-    setTimeSavedDisplay(null); // not enough history yet
-    return;
-  }
-
-  const paceNow = paceSecondsFor(mph);
-  const paceThen = paceSecondsFor(speedHistory[0].mph);
-  if (paceNow === null || paceThen === null) {
-    setTimeSavedDisplay(null);
-    return;
-  }
-
-  setTimeSavedDisplay(paceThen - paceNow);
 }
 
 function haversineMeters(a, b) {
@@ -205,6 +228,22 @@ function recordSample(mph, timestamp) {
     // within the no-raw-location rule.
     const hours = (timestamp - trip.lastSampleTimestamp) / 3_600_000;
     trip.distanceMiles += mph * hours;
+
+    // Accessory Feature: percentage of the trip spent in the zone (speed
+    // still helps) vs out of it (diminishing returns) -- the same
+    // hysteresis-corrected state the live Core Function display already
+    // computed for this exact sample (setZoneDisplay runs before
+    // recordSample in handlePosition, so zoneInZone is current). Populates
+    // the pct_time_in_zone column that's existed in the schema since the
+    // baseline migration but was always left null. Time below
+    // PACE_MIN_SPEED_MPH has no defined zone state (zoneInZone is null
+    // there), so it's excluded from both sides of the ratio rather than
+    // silently counted as "out of zone".
+    const seconds = (timestamp - trip.lastSampleTimestamp) / 1000;
+    if (zoneInZone !== null) {
+      trip.trackedSeconds += seconds;
+      if (zoneInZone) trip.inZoneSeconds += seconds;
+    }
   }
   trip.lastSampleTimestamp = timestamp;
 
@@ -252,7 +291,7 @@ function handlePosition(position) {
   if (mph !== null) {
     setSpeedDisplay(mph);
     setPaceDisplay(mph);
-    updateTimeSaved(mph, timestamp);
+    setZoneDisplay(marginalSecondsSaved(mph));
     recordSample(mph, timestamp);
   }
 
@@ -315,6 +354,8 @@ function startTrip() {
     lastSampleTimestamp: null,
     paceSecondsSum: 0,
     paceSampleCount: 0,
+    trackedSeconds: 0,
+    inZoneSeconds: 0,
   };
   recording = true;
   tripBtn.textContent = "End Trip";
@@ -322,13 +363,56 @@ function startTrip() {
   setTripTimeSavedDisplay(null);
 }
 
+// Accessory Feature: the end-of-trip summary. Per research_plan.qmd's own
+// framing of "percentage of trip time spent inside the optimal zone" as the
+// primary outcome metric, and per the professor-meeting steer to lead with
+// the time-savings zone rather than a speed-limit or baseline-speed
+// comparison, this is deliberately just the one number -- no "vs Xmph"
+// figure, no historical trends, nothing about the car. Inline swap within
+// the existing dashboard for this pass rather than a fourth screen; Surface
+// Area Check (next pipeline stage) is where the screen count itself gets
+// decided.
+function showTripSummary(pctInZone, distanceMiles, elapsedSeconds) {
+  readoutEl.classList.add("hidden");
+  tripControlsEl.classList.add("hidden");
+  tripSummaryEl.classList.remove("hidden");
+
+  if (pctInZone === null) {
+    tripSummaryValueEl.textContent = "--";
+    tripSummaryCaptionEl.textContent = "not enough data this trip";
+  } else {
+    tripSummaryValueEl.textContent = `${Math.round(pctInZone)}%`;
+    tripSummaryCaptionEl.textContent = "of this trip, more speed would have helped";
+  }
+
+  const miles = distanceMiles.toFixed(1);
+  const minutes = Math.round(elapsedSeconds / 60);
+  tripSummaryDetailEl.textContent = `${miles}mi in ${minutes}min`;
+}
+
+function hideTripSummary() {
+  tripSummaryEl.classList.add("hidden");
+  readoutEl.classList.remove("hidden");
+  tripControlsEl.classList.remove("hidden");
+}
+
+tripSummaryDismissBtn.addEventListener("click", hideTripSummary);
+
 async function endTrip() {
   const finishedTrip = trip;
   recording = false;
   trip = null;
   tripBtn.textContent = "Start Trip";
   tripBtn.disabled = true;
-  tripStatusEl.textContent = "Saving…";
+  tripStatusEl.textContent = "";
+
+  const pctInZone =
+    finishedTrip.trackedSeconds > 0
+      ? (finishedTrip.inZoneSeconds / finishedTrip.trackedSeconds) * 100
+      : null;
+  const elapsedSeconds = (Date.now() - finishedTrip.startedAt.getTime()) / 1000;
+  showTripSummary(pctInZone, finishedTrip.distanceMiles, elapsedSeconds);
+  tripSummarySaveStatusEl.textContent = "Saving…";
 
   const {
     data: { user },
@@ -358,10 +442,11 @@ async function endTrip() {
     distance_miles: finishedTrip.distanceMiles,
     sample_count: finishedTrip.sampleCount,
     avg_pace_seconds: avgPaceSeconds,
+    pct_time_in_zone: pctInZone,
   });
 
   tripBtn.disabled = false;
-  tripStatusEl.textContent = error ? `Save failed: ${error.message}` : "Trip saved.";
+  tripSummarySaveStatusEl.textContent = error ? `Save failed: ${error.message}` : "Trip saved.";
 }
 
 tripBtn.addEventListener("click", () => {
@@ -468,8 +553,7 @@ export function startApp() {
   setStatus("searching for GPS…");
   setSpeedDisplay(0);
   setPaceDisplay(0);
-  setTimeSavedDisplay(null);
-  speedHistory = [];
+  setZoneDisplay(null);
   startWatching();
 }
 
@@ -482,10 +566,10 @@ export function stopApp() {
     simulateProgressEl.classList.add("hidden");
     simulateProgressFillEl.style.width = "0%";
   }
-  speedHistory = [];
   recording = false;
   trip = null;
   tripBtn.textContent = "Start Trip";
   tripStatusEl.textContent = "";
   setTripTimeSavedDisplay(null);
+  hideTripSummary();
 }

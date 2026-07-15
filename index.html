@@ -50,20 +50,17 @@
   <main id="app" class="screen hidden">
     <button id="sign-out" class="sign-out" type="button">Sign out</button>
     <div id="status" class="status">searching for GPS…</div>
-    <div class="readout">
+    <div id="readout" class="readout">
       <div id="speed" class="speed">--</div>
       <div id="unit" class="unit">mph</div>
       <div id="pace" class="pace">--</div>
-      <div class="time-saved-gauge">
-        <div id="time-saved-label" class="time-saved-label">--</div>
-        <div class="time-saved-track">
-          <div class="time-saved-center-line"></div>
-          <div id="time-saved-fill" class="time-saved-fill"></div>
-        </div>
-        <div id="time-saved-detail" class="time-saved-detail"></div>
+      <div id="zone-indicator" class="zone-indicator">
+        <div id="zone-state" class="zone-state">--</div>
+        <div id="zone-caption" class="zone-caption"></div>
+        <div id="zone-value" class="zone-value">--</div>
       </div>
     </div>
-    <div class="trip-controls">
+    <div id="trip-controls" class="trip-controls">
       <button id="trip-btn" class="trip-btn" type="button">Start Trip</button>
       <div id="trip-status" class="trip-status"></div>
       <div id="trip-time-saved" class="trip-time-saved"></div>
@@ -75,6 +72,18 @@
       <div id="simulate-progress" class="simulate-progress hidden">
         <div id="simulate-progress-fill" class="simulate-progress-fill"></div>
       </div>
+    </div>
+    <!-- Accessory Feature: end-of-trip summary, inline-swapped in place of
+         #readout/#trip-controls when a trip ends (see showTripSummary in
+         app.js). Deliberately just the one zone-percentage number -- no
+         historical trends, no vs-speed comparison. -->
+    <div id="trip-summary" class="trip-summary hidden">
+      <div class="trip-summary-heading">Trip complete</div>
+      <div id="trip-summary-value" class="trip-summary-value">--</div>
+      <div id="trip-summary-caption" class="trip-summary-caption"></div>
+      <div id="trip-summary-detail" class="trip-summary-detail"></div>
+      <div id="trip-summary-save-status" class="trip-summary-save-status"></div>
+      <button id="trip-summary-dismiss" class="trip-btn" type="button">Continue Driving</button>
     </div>
   </main>
 

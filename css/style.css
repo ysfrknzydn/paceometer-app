@@ -144,95 +144,89 @@ html, body {
   letter-spacing: 0.02em;
 }
 
-/* Horizontal gauge for "time saved vs 10s ago" -- a bold word label plus a
-   center-zero bar (right = gaining time, left = losing it) so the meaning
-   lands in a glance instead of requiring the driver to read and interpret a
-   number. Color reinforces the same zone as the bar direction/length and
-   the label text, so no single channel (color alone, in particular) carries
-   the whole message -- important for a display meant to be read at speed.
-   The zone thresholds are this project's own heuristic for visualizing
-   diminishing returns, not a literature-derived "optimal zone" (see
-   CLAUDE.md). */
-.time-saved-gauge {
+/* Core Function display: is the current speed inside or outside the zone
+   where going ZONE_SPEED_INCREMENT_MPH faster would still buy meaningful
+   time? This is the only live-state element now (the old "time saved vs 10s
+   ago" gauge was removed), so it gets the full glance budget: a bold state
+   word plus a large color-matched number for the exact seconds/minutes --
+   no sentence to parse, the number alone answers "by how much" once the
+   word has answered "does it help". Color still isn't the only channel
+   (word + number carry the same state), just no longer paired with body
+   text small enough to require a sustained look. */
+.zone-indicator {
   width: 100%;
-  max-width: 280px;
-  margin-top: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  max-width: 320px;
+  margin-top: 1.75rem;
+  padding: 1.1rem 1rem;
+  border-radius: 16px;
+  border: 2px solid #2c2c34;
+  text-align: center;
 }
 
-.time-saved-label {
-  font-size: 1.15rem;
+.zone-state {
+  font-size: 1.6rem;
   font-weight: 800;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
   color: #8a8a92;
-  margin-bottom: 0.5rem;
 }
 
-.time-saved-track {
-  position: relative;
-  width: 100%;
-  height: 16px;
-  background: #17171c;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.time-saved-center-line {
-  position: absolute;
-  left: 50%;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: #2c2c34;
-}
-
-.time-saved-fill {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  width: 0;
-  background: #8a8a92;
-  border-radius: 8px;
-}
-
-.time-saved-detail {
-  margin-top: 0.5rem;
-  font-size: 0.85rem;
-  color: #8a8a92;
+.zone-value {
+  margin-top: 0.4rem;
+  font-size: 3rem;
+  font-weight: 800;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
-  min-height: 1.1em;
+  color: #8a8a92;
 }
 
-.time-saved-label.significant {
-  color: #4ade80;
-}
-.time-saved-fill.significant {
-  background: #4ade80;
+/* Gives the big number its "unit", the same job .unit does for the speed
+   readout above it -- without this, a shrinking number reads as "less of
+   something" with no way to tell what. Sized to actually be readable while
+   driving (not the old 0.85rem fine print), but still clearly secondary to
+   the state word and the number itself. */
+.zone-caption {
+  margin-top: 0.3rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #8a8a92;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
-.time-saved-label.diminishing {
+.zone-indicator.in-zone {
+  border-color: #facc15;
+  background: rgba(250, 204, 21, 0.08);
+}
+.zone-state.in-zone,
+.zone-value.in-zone {
   color: #facc15;
 }
-.time-saved-fill.diminishing {
-  background: #facc15;
+
+.zone-indicator.out-of-zone {
+  border-color: #4ade80;
+  background: rgba(74, 222, 128, 0.08);
+}
+.zone-state.out-of-zone,
+.zone-value.out-of-zone {
+  color: #4ade80;
 }
 
-.time-saved-label.negligible {
-  color: #8a8a92;
+/* Core Loop "state confirmed" cue: a brief outward ring pulse, color-matched
+   to the zone, the moment the state actually flips. */
+@keyframes zone-flash-in-zone {
+  0% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0.55); }
+  100% { box-shadow: 0 0 0 16px rgba(250, 204, 21, 0); }
 }
-.time-saved-fill.negligible {
-  background: #8a8a92;
+@keyframes zone-flash-out-of-zone {
+  0% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.55); }
+  100% { box-shadow: 0 0 0 16px rgba(74, 222, 128, 0); }
 }
-
-.time-saved-label.losing {
-  color: #f87171;
+.zone-indicator.in-zone.zone-flash {
+  animation: zone-flash-in-zone 0.6s ease-out;
 }
-.time-saved-fill.losing {
-  background: #f87171;
+.zone-indicator.out-of-zone.zone-flash {
+  animation: zone-flash-out-of-zone 0.6s ease-out;
 }
 
 .trip-controls {
@@ -270,6 +264,60 @@ html, body {
 
 .trip-time-saved.behind {
   color: #f87171;
+}
+
+/* Accessory Feature: end-of-trip summary. Neutral (white, not amber/green)
+   deliberately -- unlike the live zone indicator, this isn't a live signal
+   to act on, and coding a retrospective stat as "good/bad" would be
+   injecting a value judgment about someone's own completed drive. */
+.trip-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.trip-summary-heading {
+  font-size: 1rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #8a8a92;
+}
+
+.trip-summary-value {
+  margin-top: 0.6rem;
+  font-size: 5rem;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: #f5f5f7;
+}
+
+.trip-summary-caption {
+  margin-top: 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #d0d0d6;
+  text-align: center;
+  max-width: 300px;
+}
+
+.trip-summary-detail {
+  margin-top: 1.25rem;
+  font-size: 0.9rem;
+  color: #8a8a92;
+}
+
+.trip-summary-save-status {
+  margin-top: 0.3rem;
+  font-size: 0.85rem;
+  color: #8a8a92;
+  min-height: 1.2em;
+}
+
+.trip-summary #trip-summary-dismiss {
+  margin-top: 2rem;
 }
 
 /* Dev tool -- deliberately styled so it reads as "not a real app control". */
@@ -331,19 +379,24 @@ html, body {
     margin-top: 0.6rem;
   }
 
-  .time-saved-gauge {
+  .zone-indicator {
     margin-top: 0.75rem;
-    max-width: 220px;
+    max-width: 240px;
+    padding: 0.7rem 0.85rem;
   }
 
-  .time-saved-label {
-    font-size: 0.95rem;
-    margin-bottom: 0.35rem;
+  .zone-state {
+    font-size: 1.05rem;
   }
 
-  .time-saved-detail {
-    font-size: 0.75rem;
-    margin-top: 0.35rem;
+  .zone-value {
+    font-size: 1.9rem;
+    margin-top: 0.2rem;
+  }
+
+  .zone-caption {
+    font-size: 0.7rem;
+    margin-top: 0.2rem;
   }
 
   .trip-controls {
@@ -353,6 +406,30 @@ html, body {
 
   .trip-time-saved {
     font-size: 0.85rem;
+  }
+
+  .trip-summary-heading {
+    font-size: 0.85rem;
+  }
+
+  .trip-summary-value {
+    font-size: 3rem;
+    margin-top: 0.3rem;
+  }
+
+  .trip-summary-caption {
+    font-size: 0.85rem;
+    max-width: 220px;
+  }
+
+  .trip-summary-detail {
+    margin-top: 0.6rem;
+    font-size: 0.75rem;
+  }
+
+  .trip-summary #trip-summary-dismiss {
+    margin-top: 1rem;
+    max-width: 200px;
   }
 
   .simulate-btn {
