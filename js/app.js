@@ -19,10 +19,16 @@ const tripSummaryCaptionEl = document.getElementById("trip-summary-caption");
 const tripSummaryDetailEl = document.getElementById("trip-summary-detail");
 const tripSummarySaveStatusEl = document.getElementById("trip-summary-save-status");
 const tripSummaryDismissBtn = document.getElementById("trip-summary-dismiss");
+const simulateToggleBtn = document.getElementById("simulate-toggle");
+const simulateControlsEl = document.getElementById("simulate-controls");
 const simulateProfileEl = document.getElementById("simulate-profile");
 const simulateBtn = document.getElementById("simulate-btn");
 const simulateProgressEl = document.getElementById("simulate-progress");
 const simulateProgressFillEl = document.getElementById("simulate-progress-fill");
+const appScreenEl = document.getElementById("app");
+const settingsScreenEl = document.getElementById("settings-screen");
+const settingsNavBtn = document.getElementById("settings-nav");
+const settingsBackBtn = document.getElementById("settings-back");
 
 const MPS_TO_MPH = 2.23694;
 
@@ -104,7 +110,7 @@ const ZONE_NEARING_THRESHOLD_SECONDS = 120;
 // boundary by ZONE_HYSTERESIS_SECONDS in the new direction, so noise near a
 // boundary can't retrigger a flip -- confirmed with the professor's
 // collaborator, not a literature-derived number.
-const ZONE_HYSTERESIS_SECONDS = 10;
+const ZONE_HYSTERESIS_SECONDS = 5;
 
 zoneCaptionEl.textContent = `time saved at +${ZONE_SPEED_INCREMENT_MPH}mph`;
 
@@ -242,7 +248,9 @@ function setTripZoneProgressDisplay(pctInZone, secondsBehindPace) {
   tripZoneProgressEl.textContent =
     pctInZone === null ? "" : `${Math.round(pctInZone)}% of trip in zone so far`;
   tripZoneProgressTimeEl.textContent =
-    secondsBehindPace === null ? "" : `${formatDuration(secondsBehindPace)} behind the fastest pace so far`;
+    secondsBehindPace === null
+      ? ""
+      : `${formatDuration(secondsBehindPace)} behind the ~${Math.round(zoneCeilingMph())}mph efficient pace so far`;
 }
 
 function haversineMeters(a, b) {
@@ -483,7 +491,7 @@ function showTripSummary(secondsBehindPace, distanceMiles, elapsedSeconds) {
     tripSummaryCaptionEl.textContent = "not enough data this trip";
   } else {
     tripSummaryValueEl.textContent = formatDuration(secondsBehindPace);
-    tripSummaryCaptionEl.textContent = "behind the fastest pace that would have helped";
+    tripSummaryCaptionEl.textContent = `behind the ~${Math.round(zoneCeilingMph())}mph efficient pace`;
   }
 
   const miles = distanceMiles.toFixed(1);
@@ -498,6 +506,20 @@ function hideTripSummary() {
 }
 
 tripSummaryDismissBtn.addEventListener("click", hideTripSummary);
+
+// Settings is a real 4th screen (Surface Area Check, 2026-07-16), toggled
+// independently of the auth-screen/app-screen swap in auth.js -- the
+// driver stays signed in the whole time, so this doesn't go through that
+// listener, same reasoning as the trip-summary inline swap above.
+settingsNavBtn.addEventListener("click", () => {
+  appScreenEl.classList.add("hidden");
+  settingsScreenEl.classList.remove("hidden");
+});
+
+settingsBackBtn.addEventListener("click", () => {
+  settingsScreenEl.classList.add("hidden");
+  appScreenEl.classList.remove("hidden");
+});
 
 async function endTrip() {
   const finishedTrip = trip;
@@ -732,6 +754,13 @@ simulateBtn.addEventListener("click", () => {
   } else {
     startSimulatedDrive();
   }
+});
+
+// Collapsed by default (2026-07-16) so this dev-only control doesn't
+// visually compete with the live readout -- one tap reveals it.
+simulateToggleBtn.addEventListener("click", () => {
+  const nowHidden = simulateControlsEl.classList.toggle("hidden");
+  simulateToggleBtn.textContent = nowHidden ? "Dev tools ▶" : "Dev tools ▾";
 });
 // --- end dev tool -----------------------------------------------------------
 

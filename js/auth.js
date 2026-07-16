@@ -3,6 +3,7 @@ import { startApp, stopApp } from "./app.js";
 
 const authScreen = document.getElementById("auth-screen");
 const appScreen = document.getElementById("app");
+const settingsScreen = document.getElementById("settings-screen");
 const authForm = document.getElementById("auth-form");
 const emailInput = document.getElementById("email");
 const passwordInput = document.getElementById("password");
@@ -57,6 +58,7 @@ signOutBtn.addEventListener("click", async () => {
 
 function showApp() {
   authScreen.classList.add("hidden");
+  settingsScreen.classList.add("hidden");
   appScreen.classList.remove("hidden");
   startApp();
 }
@@ -64,6 +66,7 @@ function showApp() {
 function showAuth() {
   stopApp();
   appScreen.classList.add("hidden");
+  settingsScreen.classList.add("hidden");
   authScreen.classList.remove("hidden");
   authForm.reset();
 }

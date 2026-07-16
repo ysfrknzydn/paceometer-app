@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.6";
 
 // The anon key is safe to commit -- it identifies the app, not a secret.
 // Row Level Security policies (see supabase/migrations/) are what actually

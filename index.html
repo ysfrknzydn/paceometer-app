@@ -48,7 +48,7 @@
   </div>
 
   <main id="app" class="screen hidden">
-    <button id="sign-out" class="sign-out" type="button">Sign out</button>
+    <button id="settings-nav" class="settings-nav" type="button" aria-label="Settings">⚙</button>
     <div id="status" class="status">searching for GPS…</div>
     <div id="readout" class="readout">
       <div id="speed" class="speed">--</div>
@@ -65,11 +65,14 @@
       <div id="trip-status" class="trip-status"></div>
       <div id="trip-zone-progress" class="trip-zone-progress"></div>
       <div id="trip-zone-progress-time" class="trip-zone-progress-time"></div>
-      <!-- Dev tool for testing indoors without driving. Remove this block
-           (dropdown + button + progress bar) along with its app.js code
-           (search "DEV TOOL") before shipping to real study participants --
-           see CLAUDE.md pre-launch checklist. -->
-      <div id="simulate-controls" class="simulate-controls">
+      <!-- Dev tool for testing indoors without driving. Remove this whole
+           block (toggle + dropdown + button + progress bar) along with its
+           app.js code (search "DEV TOOL") before shipping to real study
+           participants -- see CLAUDE.md pre-launch checklist. Collapsed
+           behind a disclosure toggle by default (2026-07-16) so it doesn't
+           visually compete with the live readout during a normal demo. -->
+      <button id="simulate-toggle" class="simulate-toggle link-btn" type="button">Dev tools &#9656;</button>
+      <div id="simulate-controls" class="simulate-controls hidden">
         <select id="simulate-profile" class="simulate-profile">
           <option value="full">Full range</option>
           <option value="residential">Residential</option>
@@ -96,6 +99,31 @@
       <button id="trip-summary-dismiss" class="trip-btn" type="button">Continue Driving</button>
     </div>
   </main>
+
+  <div id="settings-screen" class="screen settings-screen hidden">
+    <div class="settings-content">
+      <button id="settings-back" class="link-btn settings-back" type="button">&larr; Back</button>
+      <h1 class="settings-heading">Settings</h1>
+
+      <section class="settings-section">
+        <h2>About Paceometer</h2>
+        <p>Instead of just showing your speed, Paceometer shows how much time speeding up would actually save you, plus a traffic-light color so you can tell at a glance whether it's still worth it.</p>
+        <p><strong>The pace number</strong> (minutes to cover 10 miles at your current speed) is based on a real published study (Peer &amp; Gamliel, 2013), which found that showing drivers this number instead of just mph made them much better at judging how much time speeding up would actually save.</p>
+        <p><strong>The traffic light:</strong> green means going 10mph faster would still save meaningful time; yellow means that gain is shrinking; red means going faster wouldn't meaningfully save you any time at all. These specific speed cutoffs (around 50mph and 73mph) are this app's own design choice, not from a published study — chosen because they land on clean, round numbers within the same math as the pace formula above.</p>
+        <p><strong>The end-of-trip number</strong> is how many seconds you spent going slower than the fastest pace that would've actually helped, counted only over the parts of the trip where speeding up would have mattered. A small number is a good sign — it means you were already driving close to an efficient pace.</p>
+        <p>What this app doesn't know: the speed limit or how safe a road is. It only answers the time-savings math above, nothing else — so "green" never means a road is safe to speed on.</p>
+      </section>
+
+      <section class="settings-section">
+        <h2>Privacy</h2>
+        <p>Your raw location (GPS coordinates) is never sent anywhere or stored — it stays on your phone the whole time, used only to calculate your speed in the moment.</p>
+        <p>When you end a trip, only summary numbers are saved: average/min/max speed, distance, and how much of the trip was in the "still helps" zone. No route and no coordinates ever leave your phone.</p>
+        <p>Only you can see your own trips — the database is locked down so each signed-in driver can only read their own data.</p>
+      </section>
+
+      <button id="sign-out" class="trip-btn settings-sign-out" type="button">Sign out</button>
+    </div>
+  </div>
 
   <script type="module" src="js/auth.js"></script>
 </body>

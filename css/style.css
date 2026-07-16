@@ -84,17 +84,6 @@ html, body {
   min-height: 1.2em;
 }
 
-.sign-out {
-  position: absolute;
-  top: env(safe-area-inset-top, 16px);
-  right: calc(1rem + env(safe-area-inset-right));
-  background: none;
-  border: none;
-  color: #8a8a92;
-  font-size: 0.9rem;
-  text-decoration: underline;
-}
-
 .status {
   position: absolute;
   top: env(safe-area-inset-top, 16px);
@@ -394,6 +383,84 @@ html, body {
   height: 100%;
   width: 0%;
   background: #f59e0b;
+}
+
+/* Surface Area Check (2026-07-16): settings screen, reachable from the
+   live dashboard. Unlike the other .screen elements, its content can run
+   taller than the viewport (paragraphs of About/Privacy text), so it
+   overrides the centered/fixed layout with a top-aligned, scrollable one
+   rather than clipping under body's overflow:hidden. */
+.settings-nav {
+  position: absolute;
+  /* env(safe-area-inset-top) resolves to a defined 0 on non-notch screens,
+     so the env() fallback never kicks in there -- max() guarantees the
+     16px margin either way instead of the button sitting flush at the
+     very edge. */
+  top: max(env(safe-area-inset-top), 16px);
+  left: max(env(safe-area-inset-left), 16px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: #8a8a92;
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.settings-screen {
+  justify-content: flex-start;
+  overflow-y: auto;
+  padding-top: calc(1.5rem + env(safe-area-inset-top));
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+}
+
+.settings-content {
+  width: 100%;
+  max-width: 480px;
+}
+
+.settings-back {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+.settings-heading {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+}
+
+.settings-section {
+  margin-bottom: 2rem;
+}
+
+.settings-section h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8a8a92;
+  margin-bottom: 0.75rem;
+}
+
+.settings-section p {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #d0d0d6;
+  margin-bottom: 0.85rem;
+}
+
+.settings-section p:last-child {
+  margin-bottom: 0;
+}
+
+.settings-sign-out {
+  width: 100%;
+  margin-bottom: 1rem;
 }
 
 /* Phone turned on its side (mounted horizontally on the dash): the viewport
