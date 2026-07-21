@@ -1,14 +1,858 @@
+:root {
+  /* Accent is deliberately its own hue (a dashboard-instrument blue), never
+     reused for the red/yellow/green zone states below -- keeps "this is a
+     brand/UI element" and "this is a live safety-relevant signal" visually
+     distinct from each other. --accent-2 is a second, complementary hue from
+     the same "brand" bucket (2026-07-21 "more splash" pass) used for the
+     pace readout, the settings icon chips, and a second background glow --
+     never on the zone indicator itself, same separation-of-concerns reason
+     as --accent. */
+  --accent: #4f8fe8;
+  --accent-text: #fff;
+  --accent-dim: rgba(79, 143, 232, 0.16);
+  --accent-glow: rgba(79, 143, 232, 0.35);
+  --accent-2: #9b87f5;
+  --accent-2-dim: rgba(155, 135, 245, 0.16);
+  --accent-2-glow: rgba(155, 135, 245, 0.3);
+  --bg-tint: #191a22;
+  --bg-tint-2: #241a3a;
+  --surface: #15151b;
+  --surface-border: #26262f;
+  --text-primary: #f5f5f7;
+  --text-secondary: #9a9aa2;
+  --text-tertiary: #6a6a72;
+  /* Body/numeric font stacks are both swappable via the dev-only font
+     comparison tool (2026-07-21) -- see #font-switch in the dashboard's Dev
+     tools disclosure and the [data-font=...] blocks below. Every option is
+     either a CSS Fonts Level 4 generic keyword (ui-serif/ui-monospace/
+     ui-rounded, widely supported in modern Safari/Chrome/Firefox) or a named
+     font Apple ships on every iOS/macOS device -- the project's primary
+     target -- so this stays zero-dependency (no network font, no CDN)
+     regardless of which option is picked. Non-Apple platforms just fall back
+     to the plain system-sans stack. */
+  --font-body: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  --font-numeric: ui-rounded, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  /* Controls consumed by the color-level dev tool below. Defaults here match
+     "level 2" (the current look) exactly, so leaving data-color-level unset
+     changes nothing. --glow1-size/--glow2-size are the background glows'
+     ellipse size (geometry, not opacity -- avoids relying on color-mix()
+     precision for something as visible as "how big is the glow"); --extra-
+     tint/--extra-tint-dim feed elements that are neutral gray through level
+     2 and only pick up color at level 3+; --border-eff and --button-bg-eff
+     let the top levels (4-5) tint borders and turn the button fill into a
+     two-tone gradient without duplicating every button/border rule per
+     level. */
+  --glow1-size: 90% 50%;
+  --glow2-size: 70% 40%;
+  --extra-tint: var(--text-secondary);
+  --extra-tint-dim: var(--text-tertiary);
+  --border-eff: var(--surface-border);
+  --button-bg-eff: var(--accent);
+}
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
+/* Dev-only palette comparison tool (2026-07-21) -- see #theme-switch in the
+   dashboard's Dev tools disclosure and the THEME_STORAGE_KEY logic in
+   js/app.js. Each block overrides only --accent/--accent-text/--bg-tint/
+   --surface*, never the .zone-indicator red/yellow/green colors (tested
+   safety signal, not a decorative choice) and never the base near-black
+   background level (html/body below always composites --bg-tint over
+   #08080b, so the app stays usable as a night dashboard no matter which
+   palette is active). Once a palette is picked for real, fold its values
+   into the plain :root block above and delete this whole block plus the
+   switcher UI, same as any other dev tool per the CLAUDE.md pre-launch
+   checklist. */
+:root[data-theme="purple"] {
+  --accent: #9b2aab;
+  --accent-text: #fff;
+  --accent-dim: rgba(155, 42, 171, 0.16);
+  --accent-glow: rgba(155, 42, 171, 0.4);
+  --accent-2: #ff70bf;
+  --accent-2-dim: rgba(255, 112, 191, 0.16);
+  --accent-2-glow: rgba(255, 112, 191, 0.3);
+  --bg-tint: #3a2464;
+  --bg-tint-2: #4a1f42;
+  --surface: #1c1524;
+  --surface-border: #332440;
+}
+
+:root[data-theme="navy-teal"] {
+  --accent: #36ada3;
+  --accent-text: #06201d;
+  --accent-dim: rgba(54, 173, 163, 0.16);
+  --accent-glow: rgba(54, 173, 163, 0.4);
+  --accent-2: #5b8fd6;
+  --accent-2-dim: rgba(91, 143, 214, 0.16);
+  --accent-2-glow: rgba(91, 143, 214, 0.3);
+  --bg-tint: #16195e;
+  --bg-tint-2: #1a2f4a;
+  --surface: #12162c;
+  --surface-border: #202a45;
+}
+
+:root[data-theme="violet-gold"] {
+  --accent: #b13bff;
+  --accent-text: #fff;
+  --accent-dim: rgba(177, 59, 255, 0.16);
+  --accent-glow: rgba(177, 59, 255, 0.4);
+  --accent-2: #ffcc00;
+  --accent-2-dim: rgba(255, 204, 0, 0.16);
+  --accent-2-glow: rgba(255, 204, 0, 0.22);
+  --bg-tint: #1c0c53;
+  --bg-tint-2: #3a2e08;
+  --surface: #160f2e;
+  --surface-border: #281a4a;
+}
+
+/* The user's stated favorite. Accent deliberately pulled from the palette's
+   cool end (the sky blue) rather than its orange/red end: those sit close in
+   hue to the zone indicator's own yellow ("nearing the limit") and red
+   ("won't help") states, and leaning on orange also drifts back toward the
+   warm-accent "AI generated app" look the 2026-07-21 visual pass moved away
+   from. The warmer tones (pale yellow/orange/red) still show up, just as a
+   low-opacity background wash rather than on interactive elements -- see the
+   html/body gradient-stop comment below. Accent is pale, so button text
+   flips to a dark ink (--accent-text) instead of white for contrast. */
+:root[data-theme="sky"] {
+  --accent: #6fd4f2;
+  --accent-text: #072028;
+  --accent-dim: rgba(111, 212, 242, 0.16);
+  --accent-glow: rgba(111, 212, 242, 0.4);
+  /* This is the one place the palette's warm end (orange) shows up --
+     confined to the pace readout, settings icon chip, and a background
+     glow, same as every other theme's --accent-2, never on the zone
+     indicator or the primary buttons. */
+  --accent-2: #ffa239;
+  --accent-2-dim: rgba(255, 162, 57, 0.16);
+  --accent-2-glow: rgba(255, 162, 57, 0.22);
+  --bg-tint: #14313f;
+  --bg-tint-2: #3a2410;
+  --surface: #101c26;
+  --surface-border: #1c3040;
+}
+
+/* 12 more palettes (2026-07-21, third same-day follow-up), all sourced from
+   external palette-site screenshots the user supplied directly -- implemented
+   faithfully rather than substituted, per the same "let the user compare
+   the real thing" reasoning as the first four. A few of these are
+   inherently warm/green palettes with no cool-hued alternative swatch
+   available at all, so the "keep accent away from the zone's red/yellow/
+   green hues" guideline from the first four themes can't always be honored
+   here -- flagged individually below where it applies. The zone indicator
+   itself is still never touched by any theme, regardless. */
+:root[data-theme="crimson-gold"] {
+  /* Every swatch in this palette is either red or yellow -- both zone hues.
+     No cool alternative exists to substitute. Worth judging live against the
+     zone indicator's own red/yellow states before considering this one. */
+  --accent: #c5172e;
+  --accent-text: #fff;
+  --accent-dim: rgba(197, 23, 46, 0.16);
+  --accent-glow: rgba(197, 23, 46, 0.4);
+  --accent-2: #fcf259;
+  --accent-2-dim: rgba(252, 242, 89, 0.16);
+  --accent-2-glow: rgba(252, 242, 89, 0.22);
+  --bg-tint: #4a102a;
+  --bg-tint-2: #3d3005;
+  --surface: #201018;
+  --surface-border: #3a1c2c;
+}
+
+:root[data-theme="royal-blue"] {
+  --accent: #344cb7;
+  --accent-text: #fff;
+  --accent-dim: rgba(52, 76, 183, 0.16);
+  --accent-glow: rgba(52, 76, 183, 0.4);
+  --accent-2: #ffeb00;
+  --accent-2-dim: rgba(255, 235, 0, 0.16);
+  --accent-2-glow: rgba(255, 235, 0, 0.2);
+  --bg-tint: #000957;
+  --bg-tint-2: #3d3406;
+  --surface: #0d1240;
+  --surface-border: #1c2560;
+}
+
+/* Every swatch here is a shade of green -- the same hue family as the zone
+   indicator's own "still helps" state, with no alternative in the source
+   palette at all. The strongest clash candidate of all 16 themes; worth
+   dogfooding a drive on this one specifically before trusting first
+   impressions from a static screenshot. */
+:root[data-theme="lime"] {
+  --accent: #06d001;
+  --accent-text: #fff;
+  --accent-dim: rgba(6, 208, 1, 0.16);
+  --accent-glow: rgba(6, 208, 1, 0.4);
+  --accent-2: #9bec00;
+  --accent-2-dim: rgba(155, 236, 0, 0.16);
+  --accent-2-glow: rgba(155, 236, 0, 0.22);
+  --bg-tint: #059212;
+  --bg-tint-2: #234a06;
+  --surface: #0e1c10;
+  --surface-border: #1c341c;
+}
+
+/* Source palette has no dark swatch at all (every color is a light blue) --
+   bg-tint/bg-tint-2 below are darkened derivatives of the same hues, not
+   colors actually present in the original palette, so the background stays
+   usable as a night dashboard. */
+:root[data-theme="sky-pastel"] {
+  --accent: #6499e9;
+  --accent-text: #fff;
+  --accent-dim: rgba(100, 153, 233, 0.16);
+  --accent-glow: rgba(100, 153, 233, 0.4);
+  --accent-2: #a6f6ff;
+  --accent-2-dim: rgba(166, 246, 255, 0.18);
+  --accent-2-glow: rgba(166, 246, 255, 0.25);
+  --bg-tint: #16244a;
+  --bg-tint-2: #123a3a;
+  --surface: #101830;
+  --surface-border: #1c2c50;
+}
+
+:root[data-theme="ultraviolet"] {
+  --accent: #865dff;
+  --accent-text: #fff;
+  --accent-dim: rgba(134, 93, 255, 0.16);
+  --accent-glow: rgba(134, 93, 255, 0.4);
+  --accent-2: #ffa3fd;
+  --accent-2-dim: rgba(255, 163, 253, 0.16);
+  --accent-2-glow: rgba(255, 163, 253, 0.22);
+  --bg-tint: #191825;
+  --bg-tint-2: #3a1830;
+  --surface: #1d1a2c;
+  --surface-border: #332b4a;
+}
+
+/* No dark swatch in the source palette (all four colors are bright/pastel) --
+   same derived-background approach as sky-pastel above. */
+:root[data-theme="candy"] {
+  --accent: #ff55bb;
+  --accent-text: #fff;
+  --accent-dim: rgba(255, 85, 187, 0.16);
+  --accent-glow: rgba(255, 85, 187, 0.4);
+  --accent-2: #b6eafa;
+  --accent-2-dim: rgba(182, 234, 250, 0.18);
+  --accent-2-glow: rgba(182, 234, 250, 0.25);
+  --bg-tint: #3a1030;
+  --bg-tint-2: #10303a;
+  --surface: #1c1220;
+  --surface-border: #332030;
+}
+
+/* Warm-only palette (cream/gold/orange/brown), same "no cool alternative"
+   situation as crimson-gold/lime above, though orange sits a little further
+   from the zone's red/yellow than a pure hit would. */
+:root[data-theme="desert"] {
+  --accent: #ff8400;
+  --accent-text: #fff;
+  --accent-dim: rgba(255, 132, 0, 0.16);
+  --accent-glow: rgba(255, 132, 0, 0.4);
+  --accent-2: #ffd93d;
+  --accent-2-dim: rgba(255, 217, 61, 0.16);
+  --accent-2-glow: rgba(255, 217, 61, 0.2);
+  --bg-tint: #4f200d;
+  --bg-tint-2: #3d3005;
+  --surface: #241a12;
+  --surface-border: #3a2a1c;
+}
+
+/* A literal green-yellow-orange-red heat gradient -- hits all three zone
+   hues in one palette, more than any other theme here. Its whole identity is
+   "a rainbow," which may read as clearly decorative rather than confusing
+   with the zone box in practice, but it's the single best candidate to
+   actually drive-test rather than judge from a screenshot. */
+:root[data-theme="citrus"] {
+  --accent: #9ede73;
+  --accent-text: #14210c;
+  --accent-dim: rgba(158, 222, 115, 0.16);
+  --accent-glow: rgba(158, 222, 115, 0.4);
+  --accent-2: #e48900;
+  --accent-2-dim: rgba(228, 137, 0, 0.16);
+  --accent-2-glow: rgba(228, 137, 0, 0.22);
+  --bg-tint: #1a2410;
+  --bg-tint-2: #331a05;
+  --surface: #141c10;
+  --surface-border: #243016;
+}
+
+/* Dark neutrals plus a pure #FF0000 red -- even more saturated than the zone
+   indicator's own (softer) red, and there's no non-red/orange swatch to use
+   instead. Flagged as the theme most likely to read as "warning" rather than
+   "brand" at a glance. */
+:root[data-theme="ember"] {
+  --accent: #ff4d00;
+  --accent-text: #fff;
+  --accent-dim: rgba(255, 77, 0, 0.16);
+  --accent-glow: rgba(255, 77, 0, 0.4);
+  --accent-2: #ff0000;
+  --accent-2-dim: rgba(255, 0, 0, 0.14);
+  --accent-2-glow: rgba(255, 0, 0, 0.2);
+  --bg-tint: #272121;
+  --bg-tint-2: #2a0e08;
+  --surface: #211d1d;
+  --surface-border: #3a3232;
+}
+
+/* No dark swatch in the source palette -- derived dark background, same
+   approach as sky-pastel/candy above. */
+:root[data-theme="magenta-pastel"] {
+  --accent: #ff00c8;
+  --accent-text: #fff;
+  --accent-dim: rgba(255, 0, 200, 0.16);
+  --accent-glow: rgba(255, 0, 200, 0.4);
+  --accent-2: #f38eff;
+  --accent-2-dim: rgba(243, 142, 255, 0.16);
+  --accent-2-glow: rgba(243, 142, 255, 0.22);
+  --bg-tint: #330a2a;
+  --bg-tint-2: #241030;
+  --surface: #1c1220;
+  --surface-border: #33203a;
+}
+
+:root[data-theme="cyber-teal"] {
+  --accent: #00adb5;
+  --accent-text: #062023;
+  --accent-dim: rgba(0, 173, 181, 0.16);
+  --accent-glow: rgba(0, 173, 181, 0.4);
+  --accent-2: #00fff5;
+  --accent-2-dim: rgba(0, 255, 245, 0.18);
+  --accent-2-glow: rgba(0, 255, 245, 0.25);
+  --bg-tint: #222831;
+  --bg-tint-2: #0a2e2c;
+  --surface: #1a2028;
+  --surface-border: #2c333c;
+}
+
+:root[data-theme="tropical"] {
+  --accent: #3ec1d3;
+  --accent-text: #072024;
+  --accent-dim: rgba(62, 193, 211, 0.16);
+  --accent-glow: rgba(62, 193, 211, 0.4);
+  --accent-2: #ff165d;
+  --accent-2-dim: rgba(255, 22, 93, 0.16);
+  --accent-2-glow: rgba(255, 22, 93, 0.22);
+  --bg-tint: #0f2d33;
+  --bg-tint-2: #330a1a;
+  --surface: #101c20;
+  --surface-border: #1c2c30;
+}
+
+/* George Washington University's official colors (2026-07-21, fourth
+   same-day follow-up) -- the one theme here with a real institutional
+   identity rather than a picked-for-fun palette, given this project is
+   Professor Helveston's GWU research. Accent is GW's brighter "Colonial
+   blue" (#0096D6); the buff/tan (#A99768) is GW's actual secondary color,
+   used the same way every other theme uses --accent-2. Neither hue is
+   close to the zone indicator's red/yellow/green. White (#FFFFFF) from the
+   source palette isn't a separate token -- --text-primary is already
+   near-white. */
+:root[data-theme="gwu"] {
+  --accent: #0096d6;
+  --accent-text: #fff;
+  --accent-dim: rgba(0, 150, 214, 0.16);
+  --accent-glow: rgba(0, 150, 214, 0.4);
+  --accent-2: #a99768;
+  --accent-2-dim: rgba(169, 151, 104, 0.18);
+  --accent-2-glow: rgba(169, 151, 104, 0.25);
+  --bg-tint: #0a3b5d;
+  --bg-tint-2: #332c1a;
+  --surface: #0d2338;
+  --surface-border: #1c3550;
+}
+
+/* Dev-only font comparison tool (2026-07-21) -- see #font-switch in the
+   dashboard's Dev tools disclosure and the FONT_STORAGE_KEY logic in
+   js/app.js. Swaps --font-body/--font-numeric only. Remove alongside the
+   rest of Dev tools once a final choice is made, same as the theme
+   switcher above. */
+:root[data-font="rounded"] {
+  --font-body: ui-rounded, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  --font-numeric: ui-rounded, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+}
+
+:root[data-font="serif"] {
+  --font-body: ui-serif, Georgia, "Times New Roman", serif;
+  --font-numeric: ui-serif, Georgia, "Times New Roman", serif;
+}
+
+:root[data-font="mono"] {
+  --font-body: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-numeric: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* Avenir Next/Futura/Optima and everything else below ship on every iOS and
+   macOS device (Apple's own built-in font library, not a download) but
+   aren't universal elsewhere -- all fall back to a plain generic family
+   (sans-serif/serif/monospace/cursive/fantasy as appropriate) on non-Apple
+   platforms, which is fine for a dev-only comparison tool primarily used on
+   the project's target hardware. Expanded 2026-07-21 (third same-day
+   follow-up) from 6 options to ~26 spanning sans/serif/slab/monospace/
+   display/script/novelty, per an explicit ask to "see a very wide range" --
+   still zero network dependency throughout, consistent with the earlier
+   choice of on-device fonts over a Google Fonts CDN link. */
+:root[data-font="avenir"] {
+  --font-body: "Avenir Next", Avenir, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-numeric: "Avenir Next", Avenir, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+:root[data-font="futura"] {
+  --font-body: Futura, "Avenir Next", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-numeric: Futura, "Avenir Next", -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+:root[data-font="optima"] {
+  --font-body: Optima, "Avenir Next", -apple-system, sans-serif;
+  --font-numeric: Optima, "Avenir Next", -apple-system, sans-serif;
+}
+
+:root[data-font="verdana"] {
+  --font-body: Verdana, Geneva, sans-serif;
+  --font-numeric: Verdana, Geneva, sans-serif;
+}
+
+:root[data-font="trebuchet"] {
+  --font-body: "Trebuchet MS", -apple-system, sans-serif;
+  --font-numeric: "Trebuchet MS", -apple-system, sans-serif;
+}
+
+:root[data-font="georgia"] {
+  --font-body: Georgia, "Times New Roman", serif;
+  --font-numeric: Georgia, "Times New Roman", serif;
+}
+
+:root[data-font="baskerville"] {
+  --font-body: Baskerville, Georgia, serif;
+  --font-numeric: Baskerville, Georgia, serif;
+}
+
+:root[data-font="palatino"] {
+  --font-body: Palatino, "Palatino Linotype", Georgia, serif;
+  --font-numeric: Palatino, "Palatino Linotype", Georgia, serif;
+}
+
+:root[data-font="times"] {
+  --font-body: "Times New Roman", Times, serif;
+  --font-numeric: "Times New Roman", Times, serif;
+}
+
+:root[data-font="didot"] {
+  --font-body: Didot, Georgia, serif;
+  --font-numeric: Didot, Georgia, serif;
+}
+
+:root[data-font="typewriter"] {
+  --font-body: "American Typewriter", Courier, monospace;
+  --font-numeric: "American Typewriter", Courier, monospace;
+}
+
+:root[data-font="courier"] {
+  --font-body: "Courier New", Courier, monospace;
+  --font-numeric: "Courier New", Courier, monospace;
+}
+
+:root[data-font="impact"] {
+  --font-body: Impact, Charcoal, sans-serif;
+  --font-numeric: Impact, Charcoal, sans-serif;
+}
+
+:root[data-font="arialblack"] {
+  --font-body: "Arial Black", Arial, sans-serif;
+  --font-numeric: "Arial Black", Arial, sans-serif;
+}
+
+:root[data-font="copperplate"] {
+  --font-body: Copperplate, "Copperplate Gothic Light", serif;
+  --font-numeric: Copperplate, "Copperplate Gothic Light", serif;
+}
+
+/* Script/handwriting options below are the most likely to actually break
+   layout (wide, variable-width, sometimes all-lowercase-styled glyphs) on
+   the numeric readouts specifically -- that's expected and part of what's
+   worth seeing in the comparison, not a bug to fix here. */
+:root[data-font="snell"] {
+  --font-body: "Snell Roundhand", "Apple Chancery", cursive;
+  --font-numeric: "Snell Roundhand", "Apple Chancery", cursive;
+}
+
+:root[data-font="zapfino"] {
+  --font-body: Zapfino, "Snell Roundhand", cursive;
+  --font-numeric: Zapfino, "Snell Roundhand", cursive;
+}
+
+:root[data-font="bradley"] {
+  --font-body: "Bradley Hand", cursive;
+  --font-numeric: "Bradley Hand", cursive;
+}
+
+:root[data-font="markerfelt"] {
+  --font-body: "Marker Felt", Chalkboard, cursive;
+  --font-numeric: "Marker Felt", Chalkboard, cursive;
+}
+
+:root[data-font="noteworthy"] {
+  --font-body: Noteworthy, Chalkboard, sans-serif;
+  --font-numeric: Noteworthy, Chalkboard, sans-serif;
+}
+
+:root[data-font="chalkboard"] {
+  --font-body: "Chalkboard SE", Chalkboard, sans-serif;
+  --font-numeric: "Chalkboard SE", Chalkboard, sans-serif;
+}
+
+:root[data-font="comicsans"] {
+  --font-body: "Comic Sans MS", "Comic Sans", cursive;
+  --font-numeric: "Comic Sans MS", "Comic Sans", cursive;
+}
+
+:root[data-font="papyrus"] {
+  --font-body: Papyrus, fantasy;
+  --font-numeric: Papyrus, fantasy;
+}
+
+/* Dev-only color-INTENSITY comparison tool (2026-07-21, same-day follow-up to
+   the palette tool above) -- see #color-level-switch in the dashboard's Dev
+   tools disclosure and the COLOR_LEVEL_STORAGE_KEY logic in js/app.js. This
+   is a second, independent axis from data-theme: data-theme picks *which*
+   hue, data-color-level picks *how much* of it shows up, from 0 (none) to 5
+   (max). The zone indicator's red/yellow/green and the base near-black
+   background level are never touched by any level, same invariant as the
+   theme tool.
+     - Level 0: fully flat -- reverts --accent/--accent-2 and both background
+       glows to neutral, matching the plain black/white look from before the
+       2026-07-21 visual-identity pass even existed.
+     - Level 1: the actual first iteration of that pass -- one accent color
+       only (button, brand mark, settings heading/icons, input focus), no
+       --accent-2 features at all (those were all added in the follow-up
+       "more splash" pass), single background glow.
+     - Level 2: today's default (no override block needed -- this is just
+       what the plain rules below already produce).
+     - Levels 3-5: progressively more than 2 -- previously-neutral secondary
+       text (unit, trip-progress lines, links) picks up a tint, background
+       glows grow, and at 4-5 borders tint and the button fill becomes a
+       two-tone gradient. */
+:root[data-color-level="0"] {
+  --accent: var(--text-primary);
+  --accent-text: #0b0b0f;
+  --accent-dim: rgba(255, 255, 255, 0.05);
+  --accent-glow: rgba(0, 0, 0, 0);
+  --accent-2: var(--text-secondary);
+  --accent-2-dim: rgba(255, 255, 255, 0.05);
+  --accent-2-glow: rgba(0, 0, 0, 0);
+  --bg-tint: transparent;
+  --bg-tint-2: transparent;
+  /* Card/input surfaces are otherwise theme-tinted (each :root[data-theme=...]
+     block sets its own --surface/--surface-border alongside its accent) --
+     neutralize those too so level 0 is a true, theme-independent "no color"
+     baseline rather than just "no accent". */
+  --surface: #15151b;
+  --surface-border: #26262f;
+}
+
+:root[data-color-level="1"] {
+  --bg-tint-2: transparent;
+}
+:root[data-color-level="1"] .brand-mark-hand {
+  stroke: var(--accent);
+}
+:root[data-color-level="1"] .brand-mark-dot {
+  fill: var(--accent);
+}
+:root[data-color-level="1"] .pace {
+  color: var(--text-secondary);
+}
+:root[data-color-level="1"] .trip-btn,
+:root[data-color-level="1"] .auth-form button {
+  box-shadow: 0 6px 20px -6px var(--accent-glow);
+}
+:root[data-color-level="1"] .zone-indicator {
+  background: var(--surface);
+}
+:root[data-color-level="1"] .settings-icon-chip--accent,
+:root[data-color-level="1"] .settings-icon-chip--accent-2 {
+  background: transparent;
+  color: var(--accent);
+}
+:root[data-color-level="1"] .settings-section--accent-2 h2 {
+  color: var(--accent);
+}
+
+:root[data-color-level="3"] {
+  --glow1-size: 100% 58%;
+  --glow2-size: 85% 48%;
+  --extra-tint: color-mix(in srgb, var(--accent-2) 30%, var(--text-secondary));
+  --extra-tint-dim: color-mix(in srgb, var(--accent-2) 30%, var(--text-tertiary));
+}
+:root[data-color-level="3"] .unit,
+:root[data-color-level="3"] .trip-zone-progress,
+:root[data-color-level="3"] .link-btn {
+  color: var(--extra-tint);
+}
+:root[data-color-level="3"] .trip-zone-progress-time,
+:root[data-color-level="3"] .trip-summary-detail {
+  color: var(--extra-tint-dim);
+}
+
+:root[data-color-level="4"] {
+  --glow1-size: 115% 65%;
+  --glow2-size: 100% 55%;
+  --extra-tint: color-mix(in srgb, var(--accent-2) 50%, var(--text-secondary));
+  --extra-tint-dim: color-mix(in srgb, var(--accent-2) 50%, var(--text-tertiary));
+  --border-eff: color-mix(in srgb, var(--accent) 30%, var(--surface-border));
+  --button-bg-eff: linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+:root[data-color-level="4"] .unit,
+:root[data-color-level="4"] .trip-zone-progress,
+:root[data-color-level="4"] .link-btn {
+  color: var(--extra-tint);
+}
+:root[data-color-level="4"] .trip-zone-progress-time,
+:root[data-color-level="4"] .trip-summary-detail {
+  color: var(--extra-tint-dim);
+}
+
+:root[data-color-level="5"] {
+  --glow1-size: 130% 75%;
+  --glow2-size: 115% 62%;
+  --extra-tint: color-mix(in srgb, var(--accent-2) 70%, var(--text-secondary));
+  --extra-tint-dim: color-mix(in srgb, var(--accent-2) 70%, var(--text-tertiary));
+  --border-eff: color-mix(in srgb, var(--accent) 50%, var(--surface-border));
+  --button-bg-eff: linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+:root[data-color-level="5"] .unit,
+:root[data-color-level="5"] .trip-zone-progress,
+:root[data-color-level="5"] .link-btn {
+  color: var(--extra-tint);
+}
+:root[data-color-level="5"] .trip-zone-progress-time,
+:root[data-color-level="5"] .trip-summary-detail {
+  color: var(--extra-tint-dim);
+}
+:root[data-color-level="5"] .settings-icon-chip--accent,
+:root[data-color-level="5"] .settings-icon-chip--accent-2 {
+  box-shadow: 0 0 0 1.5px currentColor inset;
+}
+
+/* Dev-only "mode" comparison tool (2026-07-21, third same-day follow-up) --
+   see #mode-switch in the dashboard's Dev tools disclosure and the
+   MODE_STORAGE_KEY logic in js/app.js. This is a third independent axis on
+   top of theme (which hue) and color-level (how much of it): mode changes
+   *how* colors render -- texture, lighting, structure -- rather than which
+   colors are used. Five of the six reuse whichever --accent/--accent-2 the
+   theme picker already set, so any theme x mode combination works; "retro"
+   is the one exception (noted below) and deliberately forces its own fixed
+   palette as part of its bit. The zone indicator's red/yellow/green hues are
+   never reassigned by any mode -- "light" and "neon" adjust *opacity/glow*
+   on those exact same hues for legibility/effect, never the hue itself. */
+
+/* NEON: flattens the background to pure black so glowing elements have
+   real contrast to glow against, turns buttons into outlined (not filled)
+   glow-bordered shapes -- the classic neon-sign look -- and adds a glow to
+   the zone indicator's states and the big numeric readouts. */
+:root[data-mode="neon"] {
+  --bg-tint: transparent;
+  --bg-tint-2: transparent;
+}
+:root[data-mode="neon"] body {
+  background-color: #000;
+}
+:root[data-mode="neon"] .trip-btn,
+:root[data-mode="neon"] .auth-form button {
+  background: transparent;
+  color: var(--accent);
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 8px var(--accent), 0 0 22px -2px var(--accent-glow), 0 0 40px -4px var(--accent-2-glow);
+  text-shadow: 0 0 8px currentColor;
+}
+:root[data-mode="neon"] .speed,
+:root[data-mode="neon"] .zone-value.green,
+:root[data-mode="neon"] .zone-value.yellow,
+:root[data-mode="neon"] .zone-value.red,
+:root[data-mode="neon"] .zone-state.green,
+:root[data-mode="neon"] .zone-state.yellow,
+:root[data-mode="neon"] .zone-state.red {
+  text-shadow: 0 0 14px currentColor;
+}
+:root[data-mode="neon"] .zone-indicator.green { box-shadow: 0 0 26px -4px rgba(74, 222, 128, 0.7); }
+:root[data-mode="neon"] .zone-indicator.yellow { box-shadow: 0 0 26px -4px rgba(250, 204, 21, 0.7); }
+:root[data-mode="neon"] .zone-indicator.red { box-shadow: 0 0 26px -4px rgba(248, 113, 113, 0.7); }
+:root[data-mode="neon"] .brand-mark-ring {
+  filter: drop-shadow(0 0 5px var(--accent));
+}
+:root[data-mode="neon"] .settings-icon-chip--accent,
+:root[data-mode="neon"] .settings-icon-chip--accent-2 {
+  box-shadow: 0 0 10px currentColor;
+}
+
+/* PASTEL: a light, soft, candy-colored take -- flips to a pale wash
+   background instead of dark, rounds everything a little further, and
+   removes glow entirely in favor of soft diffuse shadows. Distinct from
+   "light" mode below: pastel leans stylized/friendly, light stays plain and
+   functional. */
+:root[data-mode="pastel"] {
+  --text-primary: #3a3440;
+  --text-secondary: #7a7480;
+  --text-tertiary: #a29cae;
+  --surface: #ffffff;
+  --surface-border: #ece6f2;
+  --bg-tint: transparent;
+  --bg-tint-2: transparent;
+}
+:root[data-mode="pastel"] body {
+  background: linear-gradient(160deg,
+    color-mix(in srgb, var(--accent) 14%, white),
+    color-mix(in srgb, var(--accent-2) 12%, white) 60%,
+    #fdfbff);
+}
+:root[data-mode="pastel"] .trip-btn,
+:root[data-mode="pastel"] .auth-form button {
+  border-radius: 20px;
+  box-shadow: 0 8px 20px -8px color-mix(in srgb, var(--accent) 50%, transparent);
+}
+:root[data-mode="pastel"] .settings-section,
+:root[data-mode="pastel"] .zone-indicator,
+:root[data-mode="pastel"] .auth-form input {
+  border-radius: 22px;
+  box-shadow: 0 6px 18px -10px rgba(60, 40, 80, 0.25);
+}
+:root[data-mode="pastel"] .auth-form input {
+  background: #fff;
+  border-color: var(--surface-border);
+}
+:root[data-mode="pastel"] .zone-indicator.green { background: rgba(74, 222, 128, 0.18); }
+:root[data-mode="pastel"] .zone-indicator.yellow { background: rgba(250, 204, 21, 0.2); }
+:root[data-mode="pastel"] .zone-indicator.red { background: rgba(248, 113, 113, 0.18); }
+
+/* LIGHT: a plain, functional light mode -- the most structurally invasive
+   of the six since almost everything else in this file assumes a dark page.
+   Zone-state backgrounds get a higher alpha (same exact hues, just more
+   visible against white) purely for legibility, same reasoning as pastel's
+   version of the same three rules. */
+:root[data-mode="light"] {
+  --text-primary: #1a1a1e;
+  --text-secondary: #6b6b73;
+  --text-tertiary: #97979e;
+  --surface: #ffffff;
+  --surface-border: #e2e2e8;
+  --bg-tint: transparent;
+  --bg-tint-2: transparent;
+}
+:root[data-mode="light"] body {
+  background: #f2f2f5;
+}
+:root[data-mode="light"] .auth-form input {
+  background: #fff;
+  border-color: var(--surface-border);
+}
+:root[data-mode="light"] .zone-indicator.green { background: rgba(74, 222, 128, 0.16); }
+:root[data-mode="light"] .zone-indicator.yellow { background: rgba(250, 204, 21, 0.18); }
+:root[data-mode="light"] .zone-indicator.red { background: rgba(248, 113, 113, 0.16); }
+
+/* METALLIC: brushed-chrome buttons/cards via a light-to-dark vertical
+   gradient derived from the theme's own accent/surface colors (color-mix,
+   not new hardcoded hex), plus an embossed text-shadow and an inset
+   highlight to sell the "shaped metal" read. */
+:root[data-mode="metallic"] .trip-btn,
+:root[data-mode="metallic"] .auth-form button {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--accent) 65%, white) 0%,
+    var(--accent) 45%,
+    color-mix(in srgb, var(--accent) 65%, black) 100%);
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, black);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+:root[data-mode="metallic"] .settings-section,
+:root[data-mode="metallic"] .zone-indicator {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--surface) 70%, white),
+    var(--surface));
+  border: 1px solid color-mix(in srgb, var(--surface-border) 55%, white);
+}
+:root[data-mode="metallic"] .settings-icon-chip--accent,
+:root[data-mode="metallic"] .settings-icon-chip--accent-2 {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), inset 0 -1px 0 rgba(0, 0, 0, 0.25);
+}
+
+/* GLASS: frosted translucent panels (backdrop-filter blur+saturate) over a
+   deliberately bigger, more colorful background glow so there's something
+   worth blurring behind the glass. Widely supported in Safari; degrades to
+   a plain semi-transparent panel with no blur on engines without
+   backdrop-filter, which is still a reasonable fallback look. */
+:root[data-mode="glass"] {
+  --glow1-size: 150% 85%;
+  --glow2-size: 130% 75%;
+}
+:root[data-mode="glass"] .settings-section,
+:root[data-mode="glass"] .zone-indicator,
+:root[data-mode="glass"] .auth-form input {
+  background: rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+:root[data-mode="glass"] .trip-btn,
+:root[data-mode="glass"] .auth-form button {
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(14px) saturate(180%);
+  -webkit-backdrop-filter: blur(14px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: var(--accent);
+  box-shadow: 0 4px 24px -6px var(--accent-glow);
+}
+
+/* RETRO: a terminal/CRT bit -- the one mode that deliberately overrides the
+   theme picker's hue (a fixed phosphor green/amber) rather than reusing it,
+   plus forces monospace regardless of the font picker and lays a scanline
+   texture over the whole page. An intentional exception to "modes are
+   theme/font-agnostic," not an oversight. */
+:root[data-mode="retro"] {
+  --accent: #33ff33;
+  --accent-text: #04140a;
+  --accent-2: #ffb000;
+  --font-body: ui-monospace, "SF Mono", Menlo, monospace;
+  --font-numeric: ui-monospace, "SF Mono", Menlo, monospace;
+  --bg-tint: transparent;
+  --bg-tint-2: transparent;
+}
+:root[data-mode="retro"] body {
+  background: #050805;
+}
+:root[data-mode="retro"] .speed,
+:root[data-mode="retro"] .pace,
+:root[data-mode="retro"] .zone-value {
+  text-shadow: 0 0 6px currentColor;
+}
+:root[data-mode="retro"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg,
+    rgba(0, 0, 0, 0.15) 0px, rgba(0, 0, 0, 0.15) 1px,
+    transparent 1px, transparent 3px);
+  mix-blend-mode: multiply;
+  z-index: 999;
+}
+
 html, body {
   height: 100%;
-  background: #0b0b0f;
-  color: #f5f5f7;
-  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  /* Two glows instead of one (2026-07-21 "more splash" pass): the original
+     top blob (--bg-tint, from the theme's darkest/coolest color) plus a
+     second, lower one from --bg-tint-2 (a muted, dark-adapted version of
+     --accent-2) so more of each theme's actual palette shows up on screen,
+     not just on the buttons. Both are pre-darkened hex values, not the
+     saturated accent colors themselves, so the base stays dark enough for
+     night driving regardless of theme. */
+  background:
+    radial-gradient(ellipse var(--glow2-size) at 12% 105%, var(--bg-tint-2), transparent 55%),
+    radial-gradient(ellipse var(--glow1-size) at 50% -8%, var(--bg-tint), transparent 60%),
+    #08080b;
+  color: var(--text-primary);
+  font-family: var(--font-body);
   overflow: hidden;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
@@ -28,11 +872,33 @@ html, body {
   display: none !important;
 }
 
+.brand-mark {
+  width: 44px;
+  height: 44px;
+  margin-bottom: 0.75rem;
+}
+
+/* Two-tone (2026-07-21): ring in the primary accent, hand/dot in the
+   secondary one, instead of a single flat currentColor -- a small deliberate
+   splash of the theme's second hue right where the driver's eye lands
+   first. */
+.brand-mark-ring {
+  stroke: var(--accent);
+}
+
+.brand-mark-hand {
+  stroke: var(--accent-2);
+}
+
+.brand-mark-dot {
+  fill: var(--accent-2);
+}
+
 .brand {
   font-size: 1.5rem;
   font-weight: 700;
   margin-bottom: 2rem;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
 }
 
 .auth-form {
@@ -46,32 +912,50 @@ html, body {
 .auth-form input {
   font-size: 1rem;
   padding: 0.75rem 1rem;
-  border-radius: 10px;
-  border: 1px solid #2c2c34;
-  background: #17171c;
-  color: #f5f5f7;
+  border-radius: 12px;
+  border: 1px solid var(--border-eff);
+  background: var(--surface);
+  color: var(--text-primary);
+}
+
+.auth-form input:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 
 .auth-form input::placeholder {
-  color: #6a6a72;
+  color: var(--text-tertiary);
 }
 
 .auth-form button,
 .trip-btn {
   font-size: 1rem;
   font-weight: 600;
-  padding: 0.75rem 1rem;
-  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  border-radius: 14px;
   border: none;
-  background: #f5f5f7;
-  color: #0b0b0f;
+  background: var(--button-bg-eff);
+  color: var(--accent-text);
+  /* Second, tighter glow in --accent-2 layered under the primary one
+     (2026-07-21) -- a little more color depth on the one element every
+     screen has. Fill stays flat (--button-bg-eff resolves to plain --accent)
+     through color level 3 to avoid a contrast dip against --accent-text on
+     the paler themes; only levels 4-5 turn it into a two-tone gradient (see
+     the color-level dev-tool block below), an explicit "go bold" choice at
+     the top of that dial rather than the default. */
+  box-shadow: 0 6px 20px -6px var(--accent-glow), 0 2px 12px -3px var(--accent-2-glow);
+}
+
+.auth-form button:active,
+.trip-btn:active {
+  transform: scale(0.98);
 }
 
 .link-btn {
   margin-top: 1rem;
   background: none;
   border: none;
-  color: #8a8a92;
+  color: var(--text-secondary);
   font-size: 0.9rem;
   text-decoration: underline;
 }
@@ -110,6 +994,7 @@ html, body {
 }
 
 .speed {
+  font-family: var(--font-numeric);
   font-size: 28vw;
   font-weight: 700;
   line-height: 1;
@@ -118,16 +1003,21 @@ html, body {
 
 .unit {
   font-size: 1.5rem;
-  color: #8a8a92;
+  color: var(--text-secondary);
   margin-top: 0.5rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
 
+/* Tinted with --accent-2 rather than plain gray (2026-07-21) -- the pace
+   readout is secondary to the speed number but still a live figure worth
+   giving some of the theme's color to, unlike the genuinely-neutral trip
+   readouts below (those stay gray on purpose, see their own comments). */
 .pace {
+  font-family: var(--font-numeric);
   font-size: 1.75rem;
   font-weight: 600;
-  color: #d0d0d6;
+  color: var(--accent-2);
   margin-top: 1.25rem;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
@@ -142,13 +1032,19 @@ html, body {
    word has answered "does it help". Color still isn't the only channel
    (word + number carry the same state), just no longer paired with body
    text small enough to require a sustained look. */
+/* Neutral/no-reading-yet state gets a faint themed wash (2026-07-21) instead
+   of flat --surface gray -- safe to theme because this only shows before
+   zoneState has a real value (no class applied); the instant a real reading
+   arrives, .zone-indicator.green/.yellow/.red below override this background
+   entirely with the semantic color, which is never themed. */
 .zone-indicator {
   width: 100%;
   max-width: 320px;
   margin-top: 1.75rem;
   padding: 1.1rem 1rem;
-  border-radius: 16px;
-  border: 2px solid #2c2c34;
+  border-radius: 18px;
+  border: 1px solid var(--border-eff);
+  background: radial-gradient(circle at 25% 0%, var(--accent-dim), transparent 65%), var(--surface);
   text-align: center;
 }
 
@@ -157,28 +1053,31 @@ html, body {
   font-weight: 800;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  color: #8a8a92;
+  color: var(--text-secondary);
 }
 
 .zone-value {
+  font-family: var(--font-numeric);
   margin-top: 0.4rem;
   font-size: 3rem;
   font-weight: 800;
   line-height: 1;
   font-variant-numeric: tabular-nums;
-  color: #8a8a92;
+  color: var(--text-secondary);
 }
 
 /* Gives the big number its "unit", the same job .unit does for the speed
    readout above it -- without this, a shrinking number reads as "less of
    something" with no way to tell what. Sized to actually be readable while
    driving (not the old 0.85rem fine print), but still clearly secondary to
-   the state word and the number itself. */
+   the state word and the number itself. Weight/size dialed back a step
+   (2026-07-21 declutter pass) so it reads as a caption under the number
+   rather than competing with the state word above it for attention. */
 .zone-caption {
   margin-top: 0.3rem;
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: #8a8a92;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -253,11 +1152,16 @@ html, body {
   max-width: 280px;
 }
 
+/* No longer shows "Recording..." (2026-07-21 declutter pass) -- the trip
+   button itself already flips to "End Trip" the moment a trip starts, so a
+   separate status line said the same thing a second way. Kept in the DOM
+   (still referenced by app.js, just never given text) rather than removed,
+   in case a future state (e.g. a save-in-progress notice) needs it. */
 .trip-status {
-  margin-top: 0.75rem;
+  margin-top: 0.5rem;
   font-size: 0.9rem;
-  color: #8a8a92;
-  min-height: 1.2em;
+  color: var(--text-secondary);
+  min-height: 0;
 }
 
 /* Neutral (gray, not green/red) deliberately, same reasoning as the
@@ -265,21 +1169,25 @@ html, body {
    the live signal to act on right now (the zone indicator above it already
    is that), so it doesn't get a good/bad color treatment. */
 .trip-zone-progress {
-  margin-top: 0.5rem;
+  font-family: var(--font-numeric);
+  margin-top: 0.6rem;
   font-size: 0.95rem;
   font-weight: 600;
-  color: #8a8a92;
+  color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
   min-height: 1.2em;
 }
 
 /* Second line under the percentage -- same neutral-color reasoning, smaller
-   and dimmer since it's the supporting detail, not the headline number. */
+   and dimmer since it's the supporting detail, not the headline number.
+   Tighter margin to the line above it (2026-07-21) so the two read as one
+   grouped stat, not two separate announcements. */
 .trip-zone-progress-time {
-  margin-top: 0.15rem;
+  font-family: var(--font-numeric);
+  margin-top: 0.05rem;
   font-size: 0.8rem;
   font-weight: 500;
-  color: #6a6a72;
+  color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
   min-height: 1.1em;
 }
@@ -304,12 +1212,13 @@ html, body {
 }
 
 .trip-summary-value {
+  font-family: var(--font-numeric);
   margin-top: 0.6rem;
   font-size: 5rem;
   font-weight: 800;
   line-height: 1;
   font-variant-numeric: tabular-nums;
-  color: #f5f5f7;
+  color: var(--text-primary);
 }
 
 .trip-summary-caption {
@@ -406,8 +1315,7 @@ html, body {
   padding: 0;
   background: none;
   border: none;
-  color: #8a8a92;
-  font-size: 1.6rem;
+  color: var(--text-secondary);
   line-height: 1;
 }
 
@@ -435,16 +1343,54 @@ html, body {
 }
 
 .settings-section {
-  margin-bottom: 2rem;
+  margin-bottom: 1.25rem;
+  padding: 1.25rem 1.25rem 1.1rem;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border-eff);
 }
 
 .settings-section h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 1rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #8a8a92;
-  margin-bottom: 0.75rem;
+  color: var(--accent);
+  margin-bottom: 0.9rem;
+}
+
+.settings-section--accent-2 h2 {
+  color: var(--accent-2);
+}
+
+.settings-icon {
+  flex-shrink: 0;
+}
+
+/* Colored circular chip behind each section icon (2026-07-21) -- alternates
+   accent/accent-2 per section (About/Privacy) so the two cards read as
+   distinct at a glance, not just via their heading text. */
+.settings-icon-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.settings-icon-chip--accent {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.settings-icon-chip--accent-2 {
+  background: var(--accent-2-dim);
+  color: var(--accent-2);
 }
 
 .settings-section p {

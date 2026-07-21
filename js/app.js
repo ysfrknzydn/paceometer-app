@@ -29,6 +29,46 @@ const appScreenEl = document.getElementById("app");
 const settingsScreenEl = document.getElementById("settings-screen");
 const settingsNavBtn = document.getElementById("settings-nav");
 const settingsBackBtn = document.getElementById("settings-back");
+const themeControlsEl = document.getElementById("theme-controls");
+const themeSwitchEl = document.getElementById("theme-switch");
+const fontControlsEl = document.getElementById("font-controls");
+const fontSwitchEl = document.getElementById("font-switch");
+const colorLevelControlsEl = document.getElementById("color-level-controls");
+const colorLevelSwitchEl = document.getElementById("color-level-switch");
+const modeControlsEl = document.getElementById("mode-controls");
+const modeSwitchEl = document.getElementById("mode-switch");
+
+// --- DEV TOOL: palette + font + color-level + mode comparison ---------------
+// Applied at module scope (runs immediately on page load, before the auth
+// screen is even shown) so a saved preview theme/font/color-level/mode is
+// visible everywhere, not just on the dashboard where the switchers
+// themselves live. Remove this block and the :root[data-theme=...]/
+// [data-font=...]/[data-color-level=...]/[data-mode=...] CSS blocks before
+// shipping -- see css/style.css's comments above them.
+const THEME_STORAGE_KEY = "paceometer-theme-preview";
+const FONT_STORAGE_KEY = "paceometer-font-preview";
+// "2" is the baseline color level (today's default look, no CSS override
+// block needed for it) -- same role the empty string plays for theme/font,
+// so it's the one value that clears rather than sets the attribute.
+const COLOR_LEVEL_DEFAULT = "2";
+const COLOR_LEVEL_STORAGE_KEY = "paceometer-color-level-preview";
+const MODE_STORAGE_KEY = "paceometer-mode-preview";
+const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+const savedFont = localStorage.getItem(FONT_STORAGE_KEY);
+const savedColorLevel = localStorage.getItem(COLOR_LEVEL_STORAGE_KEY);
+const savedMode = localStorage.getItem(MODE_STORAGE_KEY);
+if (savedTheme) {
+  document.documentElement.dataset.theme = savedTheme;
+}
+if (savedFont) {
+  document.documentElement.dataset.font = savedFont;
+}
+if (savedColorLevel) {
+  document.documentElement.dataset.colorLevel = savedColorLevel;
+}
+if (savedMode) {
+  document.documentElement.dataset.mode = savedMode;
+}
 
 const MPS_TO_MPH = 2.23694;
 
@@ -453,7 +493,10 @@ function startTrip() {
   };
   recording = true;
   tripBtn.textContent = "End Trip";
-  tripStatusEl.textContent = "Recording…";
+  // No separate "Recording..." status text (2026-07-21 declutter pass) --
+  // the button label above already says "End Trip", so a second line
+  // announcing the same state was pure repetition. tripStatusEl is kept
+  // around (empty) for a future save-in-progress-style notice.
   setTripZoneProgressDisplay(null, null);
 }
 
@@ -757,10 +800,65 @@ simulateBtn.addEventListener("click", () => {
 });
 
 // Collapsed by default (2026-07-16) so this dev-only control doesn't
-// visually compete with the live readout -- one tap reveals it.
+// visually compete with the live readout -- one tap reveals it. Toggles the
+// theme/font/color-level/mode preview selects alongside the simulate
+// controls; all five live behind the same disclosure since all five are
+// dev-only.
 simulateToggleBtn.addEventListener("click", () => {
   const nowHidden = simulateControlsEl.classList.toggle("hidden");
+  themeControlsEl.classList.toggle("hidden", nowHidden);
+  fontControlsEl.classList.toggle("hidden", nowHidden);
+  colorLevelControlsEl.classList.toggle("hidden", nowHidden);
+  modeControlsEl.classList.toggle("hidden", nowHidden);
   simulateToggleBtn.textContent = nowHidden ? "Dev tools ▶" : "Dev tools ▾";
+});
+
+themeSwitchEl.value = savedTheme || "";
+themeSwitchEl.addEventListener("change", () => {
+  const value = themeSwitchEl.value;
+  if (value) {
+    document.documentElement.dataset.theme = value;
+    localStorage.setItem(THEME_STORAGE_KEY, value);
+  } else {
+    delete document.documentElement.dataset.theme;
+    localStorage.removeItem(THEME_STORAGE_KEY);
+  }
+});
+
+fontSwitchEl.value = savedFont || "";
+fontSwitchEl.addEventListener("change", () => {
+  const value = fontSwitchEl.value;
+  if (value) {
+    document.documentElement.dataset.font = value;
+    localStorage.setItem(FONT_STORAGE_KEY, value);
+  } else {
+    delete document.documentElement.dataset.font;
+    localStorage.removeItem(FONT_STORAGE_KEY);
+  }
+});
+
+colorLevelSwitchEl.value = savedColorLevel || COLOR_LEVEL_DEFAULT;
+colorLevelSwitchEl.addEventListener("change", () => {
+  const value = colorLevelSwitchEl.value;
+  if (value !== COLOR_LEVEL_DEFAULT) {
+    document.documentElement.dataset.colorLevel = value;
+    localStorage.setItem(COLOR_LEVEL_STORAGE_KEY, value);
+  } else {
+    delete document.documentElement.dataset.colorLevel;
+    localStorage.removeItem(COLOR_LEVEL_STORAGE_KEY);
+  }
+});
+
+modeSwitchEl.value = savedMode || "";
+modeSwitchEl.addEventListener("change", () => {
+  const value = modeSwitchEl.value;
+  if (value) {
+    document.documentElement.dataset.mode = value;
+    localStorage.setItem(MODE_STORAGE_KEY, value);
+  } else {
+    delete document.documentElement.dataset.mode;
+    localStorage.removeItem(MODE_STORAGE_KEY);
+  }
 });
 // --- end dev tool -----------------------------------------------------------
 

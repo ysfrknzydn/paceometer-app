@@ -7,7 +7,7 @@
 
   <!-- PWA / home screen behavior -->
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#0b0b0f">
+  <meta name="theme-color" content="#08080b">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Paceometer">
@@ -37,6 +37,11 @@
 </head>
 <body>
   <div id="auth-screen" class="screen">
+    <svg class="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle class="brand-mark-ring" cx="12" cy="12" r="9" stroke-width="1.6"/>
+      <path class="brand-mark-hand" d="M12 12 L16 8" stroke-width="1.6" stroke-linecap="round"/>
+      <circle class="brand-mark-dot" cx="12" cy="12" r="1.4"/>
+    </svg>
     <h1 class="brand">Paceometer</h1>
     <form id="auth-form" class="auth-form">
       <input id="email" type="email" placeholder="Email" autocomplete="email" required>
@@ -48,7 +53,12 @@
   </div>
 
   <main id="app" class="screen hidden">
-    <button id="settings-nav" class="settings-nav" type="button" aria-label="Settings">⚙</button>
+    <button id="settings-nav" class="settings-nav" type="button" aria-label="Settings">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+        <circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="3.2" stroke-dasharray="1.8 2.6" stroke-linecap="round"/>
+        <circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      </svg>
+    </button>
     <div id="status" class="status">searching for GPS…</div>
     <div id="readout" class="readout">
       <div id="speed" class="speed">--</div>
@@ -85,6 +95,97 @@
       <div id="simulate-progress" class="simulate-progress hidden">
         <div id="simulate-progress-fill" class="simulate-progress-fill"></div>
       </div>
+      <!-- Palette comparison tool (2026-07-21) -- temporary, for picking a
+           final accent/background theme; see the :root[data-theme=...]
+           blocks in css/style.css. Remove alongside the rest of Dev tools
+           before shipping, or fold the chosen palette into the plain :root
+           block and delete this + the other data-theme blocks once a
+           palette is picked for real. -->
+      <div id="theme-controls" class="simulate-controls hidden">
+        <select id="theme-switch" class="simulate-profile">
+          <option value="">Default (blue)</option>
+          <option value="purple">Purple / magenta</option>
+          <option value="navy-teal">Navy / teal</option>
+          <option value="violet-gold">Violet / gold</option>
+          <option value="sky">Sky / sunset</option>
+          <option value="crimson-gold">Crimson / gold</option>
+          <option value="royal-blue">Royal blue</option>
+          <option value="lime">Lime</option>
+          <option value="sky-pastel">Sky pastel</option>
+          <option value="ultraviolet">Ultraviolet</option>
+          <option value="candy">Candy</option>
+          <option value="desert">Desert</option>
+          <option value="citrus">Citrus</option>
+          <option value="ember">Ember</option>
+          <option value="magenta-pastel">Magenta pastel</option>
+          <option value="cyber-teal">Cyber teal</option>
+          <option value="tropical">Tropical</option>
+          <option value="gwu">GWU (official)</option>
+        </select>
+      </div>
+      <!-- Font comparison tool (2026-07-21) -- temporary, same reasoning as
+           the theme switcher above; see the :root[data-font=...] blocks in
+           css/style.css. -->
+      <div id="font-controls" class="simulate-controls hidden">
+        <select id="font-switch" class="simulate-profile">
+          <option value="">Default (system sans)</option>
+          <option value="rounded">Rounded</option>
+          <option value="avenir">Avenir Next</option>
+          <option value="optima">Optima</option>
+          <option value="verdana">Verdana</option>
+          <option value="trebuchet">Trebuchet MS</option>
+          <option value="serif">Serif (system)</option>
+          <option value="georgia">Georgia</option>
+          <option value="baskerville">Baskerville</option>
+          <option value="palatino">Palatino</option>
+          <option value="times">Times New Roman</option>
+          <option value="didot">Didot</option>
+          <option value="typewriter">American Typewriter</option>
+          <option value="courier">Courier New</option>
+          <option value="mono">Monospace (system)</option>
+          <option value="futura">Futura</option>
+          <option value="impact">Impact</option>
+          <option value="arialblack">Arial Black</option>
+          <option value="copperplate">Copperplate</option>
+          <option value="snell">Snell Roundhand</option>
+          <option value="zapfino">Zapfino</option>
+          <option value="bradley">Bradley Hand</option>
+          <option value="markerfelt">Marker Felt</option>
+          <option value="noteworthy">Noteworthy</option>
+          <option value="chalkboard">Chalkboard SE</option>
+          <option value="comicsans">Comic Sans MS</option>
+          <option value="papyrus">Papyrus</option>
+        </select>
+      </div>
+      <!-- Mode/texture comparison tool (2026-07-21) -- a third independent
+           axis: theme picks the hue, color-level picks how much of it shows,
+           mode picks the rendering treatment (lighting/texture/structure).
+           See the :root[data-mode=...] blocks in css/style.css. -->
+      <div id="mode-controls" class="simulate-controls hidden">
+        <select id="mode-switch" class="simulate-profile">
+          <option value="">Default</option>
+          <option value="neon">Neon</option>
+          <option value="pastel">Pastel</option>
+          <option value="light">Light</option>
+          <option value="metallic">Metallic</option>
+          <option value="glass">Glass</option>
+          <option value="retro">Retro terminal</option>
+        </select>
+      </div>
+      <!-- Color-intensity comparison tool (2026-07-21) -- independent axis
+           from the theme picker above: theme picks the hue, this picks how
+           much of it shows up (0 = none, 5 = max). See the
+           :root[data-color-level=...] blocks in css/style.css. -->
+      <div id="color-level-controls" class="simulate-controls hidden">
+        <select id="color-level-switch" class="simulate-profile">
+          <option value="2">Color level 2 (current)</option>
+          <option value="0">Color level 0 (none)</option>
+          <option value="1">Color level 1 (first iteration)</option>
+          <option value="3">Color level 3</option>
+          <option value="4">Color level 4</option>
+          <option value="5">Color level 5 (max)</option>
+        </select>
+      </div>
     </div>
     <!-- Accessory Feature: end-of-trip summary, inline-swapped in place of
          #readout/#trip-controls when a trip ends (see showTripSummary in
@@ -106,7 +207,16 @@
       <h1 class="settings-heading">Settings</h1>
 
       <section class="settings-section">
-        <h2>About Paceometer</h2>
+        <h2>
+          <span class="settings-icon-chip settings-icon-chip--accent">
+            <svg class="settings-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/>
+              <path d="M12 11v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <circle cx="12" cy="7.6" r="1.1" fill="currentColor"/>
+            </svg>
+          </span>
+          About Paceometer
+        </h2>
         <p>Instead of just showing your speed, Paceometer shows how much time speeding up would actually save you, plus a traffic-light color so you can tell at a glance whether it's still worth it.</p>
         <p><strong>The pace number</strong> (minutes to cover 10 miles at your current speed) is based on a real published study (Peer &amp; Gamliel, 2013), which found that showing drivers this number instead of just mph made them much better at judging how much time speeding up would actually save.</p>
         <p><strong>The traffic light:</strong> green means going 10mph faster would still save meaningful time; yellow means that gain is shrinking; red means going faster wouldn't meaningfully save you any time at all. These specific speed cutoffs (around 50mph and 73mph) are this app's own design choice, not from a published study — chosen because they land on clean, round numbers within the same math as the pace formula above.</p>
@@ -114,8 +224,15 @@
         <p>What this app doesn't know: the speed limit or how safe a road is. It only answers the time-savings math above, nothing else — so "green" never means a road is safe to speed on.</p>
       </section>
 
-      <section class="settings-section">
-        <h2>Privacy</h2>
+      <section class="settings-section settings-section--accent-2">
+        <h2>
+          <span class="settings-icon-chip settings-icon-chip--accent-2">
+            <svg class="settings-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path d="M12 3.5 5 6v5.5c0 4.4 3 7.9 7 9 4-1.1 7-4.6 7-9V6l-7-2.5Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          Privacy
+        </h2>
         <p>Your raw location (GPS coordinates) is never sent anywhere or stored — it stays on your phone the whole time, used only to calculate your speed in the moment.</p>
         <p>When you end a trip, only summary numbers are saved: average/min/max speed, distance, and how much of the trip was in the "still helps" zone. No route and no coordinates ever leave your phone.</p>
         <p>Only you can see your own trips — the database is locked down so each signed-in driver can only read their own data.</p>
