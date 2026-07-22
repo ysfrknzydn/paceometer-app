@@ -77,7 +77,12 @@
 }
 
 html, body {
-  height: 100%;
+  /* Must match .screen's 100dvh below, not a static 100%: iOS Safari
+     resizes the dynamic viewport (dvh) as its chrome shows/hides but does
+     not recompute a percentage-based height against the same box at the
+     same time, so html/body could end up shorter than .screen and expose
+     an unpainted gap (default black) below the gradient background. */
+  height: 100dvh;
   /* Two glows instead of one (2026-07-21 "more splash" pass): the original
      top blob (--bg-tint, from the theme's darkest/coolest color) plus a
      second, lower one from --bg-tint-2 (a muted, dark-adapted version of
