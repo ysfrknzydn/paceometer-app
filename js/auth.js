@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient.js";
-import { startApp, stopApp } from "./app.js";
+import { startApp, stopApp, setViewportZoomEnabled } from "./app.js";
 
 const authScreen = document.getElementById("auth-screen");
 const appScreen = document.getElementById("app");
@@ -60,6 +60,7 @@ function showApp() {
   authScreen.classList.add("hidden");
   settingsScreen.classList.add("hidden");
   appScreen.classList.remove("hidden");
+  setViewportZoomEnabled(false);
   startApp();
 }
 
@@ -68,6 +69,7 @@ function showAuth() {
   appScreen.classList.add("hidden");
   settingsScreen.classList.add("hidden");
   authScreen.classList.remove("hidden");
+  setViewportZoomEnabled(true);
   authForm.reset();
 }
 

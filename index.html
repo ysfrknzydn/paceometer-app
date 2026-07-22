@@ -2,7 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <!-- Zoom is allowed by default (auth/settings screens benefit a low-vision
+       user) -- js/app.js's setViewportZoomEnabled() disables it only while
+       the live driving dashboard (#app) is the visible screen, per the
+       2026-07-22 accessibility-audit "your call" decision. See that
+       function's comment for the full reasoning. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Paceometer</title>
 
   <!-- PWA / home screen behavior -->
@@ -20,23 +25,33 @@
     // pre-rotation scale until something forces a relayout -- it reads as
     // "zoomed in" after flipping the phone on its side. Nudging
     // initial-scale off 1 and immediately back forces that relayout.
+    // Reads the *current* content on every rotation (rather than a cached
+    // snapshot from page load) so this doesn't clobber setViewportZoomEnabled
+    // toggling the zoom restriction on and off between screens.
     (function () {
       var viewport = document.querySelector('meta[name="viewport"]');
-      var base = viewport.getAttribute("content");
       window.addEventListener("orientationchange", function () {
+        var current = viewport.getAttribute("content");
         viewport.setAttribute(
           "content",
-          base.replace("initial-scale=1", "initial-scale=1.0001")
+          current.replace("initial-scale=1", "initial-scale=1.0001")
         );
         requestAnimationFrame(function () {
-          viewport.setAttribute("content", base);
+          viewport.setAttribute("content", current);
         });
       });
     })();
   </script>
 </head>
 <body>
-  <div id="auth-screen" class="screen">
+  <!-- <main>, not <div> (2026-07-22 accessibility pass): only one screen is
+       ever visible at a time (the other two are display:none, which excludes
+       them from the accessibility tree entirely -- same reasoning already
+       documented for the app's multiple <h1>s), so having a <main> per
+       screen doesn't create competing landmarks. Without this, a screen
+       reader had no main landmark at all on the auth screen -- an automated
+       Lighthouse pass caught this; it wasn't in the earlier manual review. -->
+  <main id="auth-screen" class="screen">
     <svg class="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <circle class="brand-mark-ring" cx="12" cy="12" r="9" stroke-width="1.6"/>
       <path class="brand-mark-hand" d="M12 12 L16 8" stroke-width="1.6" stroke-linecap="round"/>
@@ -44,13 +59,15 @@
     </svg>
     <h1 class="brand">Paceometer</h1>
     <form id="auth-form" class="auth-form">
+      <label for="email" class="sr-only">Email</label>
       <input id="email" type="email" placeholder="Email" autocomplete="email" required>
+      <label for="password" class="sr-only">Password</label>
       <input id="password" type="password" placeholder="Password" autocomplete="current-password" required minlength="6">
       <button id="auth-submit" type="submit">Sign in</button>
     </form>
     <button id="auth-toggle" class="link-btn" type="button">Need an account? Sign up</button>
-    <p id="auth-error" class="auth-error"></p>
-  </div>
+    <p id="auth-error" class="auth-error" aria-live="assertive"></p>
+  </main>
 
   <main id="app" class="screen hidden">
     <button id="settings-nav" class="settings-nav" type="button" aria-label="Settings">
@@ -69,6 +86,12 @@
         <div id="zone-caption" class="zone-caption"></div>
         <div id="zone-value" class="zone-value">--</div>
       </div>
+      <!-- Screen-reader-only announcer, updated only when the zone state
+           actually changes (js/app.js, setZoneDisplay) -- separate from the
+           visible zone-indicator above because that updates every GPS
+           sample (several times a second), which would make an aria-live
+           region there unusably noisy. -->
+      <div id="zone-state-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
     </div>
     <div id="trip-controls" class="trip-controls">
       <button id="trip-btn" class="trip-btn" type="button">Start Trip</button>
@@ -95,97 +118,6 @@
       <div id="simulate-progress" class="simulate-progress hidden">
         <div id="simulate-progress-fill" class="simulate-progress-fill"></div>
       </div>
-      <!-- Palette comparison tool (2026-07-21) -- temporary, for picking a
-           final accent/background theme; see the :root[data-theme=...]
-           blocks in css/style.css. Remove alongside the rest of Dev tools
-           before shipping, or fold the chosen palette into the plain :root
-           block and delete this + the other data-theme blocks once a
-           palette is picked for real. -->
-      <div id="theme-controls" class="simulate-controls hidden">
-        <select id="theme-switch" class="simulate-profile">
-          <option value="">Default (blue)</option>
-          <option value="purple">Purple / magenta</option>
-          <option value="navy-teal">Navy / teal</option>
-          <option value="violet-gold">Violet / gold</option>
-          <option value="sky">Sky / sunset</option>
-          <option value="crimson-gold">Crimson / gold</option>
-          <option value="royal-blue">Royal blue</option>
-          <option value="lime">Lime</option>
-          <option value="sky-pastel">Sky pastel</option>
-          <option value="ultraviolet">Ultraviolet</option>
-          <option value="candy">Candy</option>
-          <option value="desert">Desert</option>
-          <option value="citrus">Citrus</option>
-          <option value="ember">Ember</option>
-          <option value="magenta-pastel">Magenta pastel</option>
-          <option value="cyber-teal">Cyber teal</option>
-          <option value="tropical">Tropical</option>
-          <option value="gwu">GWU (official)</option>
-        </select>
-      </div>
-      <!-- Font comparison tool (2026-07-21) -- temporary, same reasoning as
-           the theme switcher above; see the :root[data-font=...] blocks in
-           css/style.css. -->
-      <div id="font-controls" class="simulate-controls hidden">
-        <select id="font-switch" class="simulate-profile">
-          <option value="">Default (system sans)</option>
-          <option value="rounded">Rounded</option>
-          <option value="avenir">Avenir Next</option>
-          <option value="optima">Optima</option>
-          <option value="verdana">Verdana</option>
-          <option value="trebuchet">Trebuchet MS</option>
-          <option value="serif">Serif (system)</option>
-          <option value="georgia">Georgia</option>
-          <option value="baskerville">Baskerville</option>
-          <option value="palatino">Palatino</option>
-          <option value="times">Times New Roman</option>
-          <option value="didot">Didot</option>
-          <option value="typewriter">American Typewriter</option>
-          <option value="courier">Courier New</option>
-          <option value="mono">Monospace (system)</option>
-          <option value="futura">Futura</option>
-          <option value="impact">Impact</option>
-          <option value="arialblack">Arial Black</option>
-          <option value="copperplate">Copperplate</option>
-          <option value="snell">Snell Roundhand</option>
-          <option value="zapfino">Zapfino</option>
-          <option value="bradley">Bradley Hand</option>
-          <option value="markerfelt">Marker Felt</option>
-          <option value="noteworthy">Noteworthy</option>
-          <option value="chalkboard">Chalkboard SE</option>
-          <option value="comicsans">Comic Sans MS</option>
-          <option value="papyrus">Papyrus</option>
-        </select>
-      </div>
-      <!-- Mode/texture comparison tool (2026-07-21) -- a third independent
-           axis: theme picks the hue, color-level picks how much of it shows,
-           mode picks the rendering treatment (lighting/texture/structure).
-           See the :root[data-mode=...] blocks in css/style.css. -->
-      <div id="mode-controls" class="simulate-controls hidden">
-        <select id="mode-switch" class="simulate-profile">
-          <option value="">Default</option>
-          <option value="neon">Neon</option>
-          <option value="pastel">Pastel</option>
-          <option value="light">Light</option>
-          <option value="metallic">Metallic</option>
-          <option value="glass">Glass</option>
-          <option value="retro">Retro terminal</option>
-        </select>
-      </div>
-      <!-- Color-intensity comparison tool (2026-07-21) -- independent axis
-           from the theme picker above: theme picks the hue, this picks how
-           much of it shows up (0 = none, 5 = max). See the
-           :root[data-color-level=...] blocks in css/style.css. -->
-      <div id="color-level-controls" class="simulate-controls hidden">
-        <select id="color-level-switch" class="simulate-profile">
-          <option value="2">Color level 2 (current)</option>
-          <option value="0">Color level 0 (none)</option>
-          <option value="1">Color level 1 (first iteration)</option>
-          <option value="3">Color level 3</option>
-          <option value="4">Color level 4</option>
-          <option value="5">Color level 5 (max)</option>
-        </select>
-      </div>
     </div>
     <!-- Accessory Feature: end-of-trip summary, inline-swapped in place of
          #readout/#trip-controls when a trip ends (see showTripSummary in
@@ -196,12 +128,12 @@
       <div id="trip-summary-value" class="trip-summary-value">--</div>
       <div id="trip-summary-caption" class="trip-summary-caption"></div>
       <div id="trip-summary-detail" class="trip-summary-detail"></div>
-      <div id="trip-summary-save-status" class="trip-summary-save-status"></div>
+      <div id="trip-summary-save-status" class="trip-summary-save-status" aria-live="polite"></div>
       <button id="trip-summary-dismiss" class="trip-btn" type="button">Continue Driving</button>
     </div>
   </main>
 
-  <div id="settings-screen" class="screen settings-screen hidden">
+  <main id="settings-screen" class="screen settings-screen hidden">
     <div class="settings-content">
       <button id="settings-back" class="link-btn settings-back" type="button">&larr; Back</button>
       <h1 class="settings-heading">Settings</h1>
@@ -238,9 +170,27 @@
         <p>Only you can see your own trips — the database is locked down so each signed-in driver can only read their own data.</p>
       </section>
 
+      <section class="settings-section">
+        <h2>
+          <span class="settings-icon-chip settings-icon-chip--accent">
+            <svg class="settings-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+              <path d="M12 2.8v2.6M12 18.6v2.6M4.2 4.2l1.9 1.9M17.9 17.9l1.9 1.9M2.8 12h2.6M18.6 12h2.6M4.2 19.8l1.9-1.9M17.9 6.1l1.9-1.9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+          </span>
+          Appearance
+        </h2>
+        <p>Follows your phone's light/dark setting by default. Override it here if you'd like.</p>
+        <div id="appearance-switch" class="appearance-switch" role="group" aria-label="Appearance">
+          <button type="button" class="appearance-option" data-appearance="system">System</button>
+          <button type="button" class="appearance-option" data-appearance="light">Light</button>
+          <button type="button" class="appearance-option" data-appearance="dark">Dark</button>
+        </div>
+      </section>
+
       <button id="sign-out" class="trip-btn settings-sign-out" type="button">Sign out</button>
     </div>
-  </div>
+  </main>
 
   <script type="module" src="js/auth.js"></script>
 </body>

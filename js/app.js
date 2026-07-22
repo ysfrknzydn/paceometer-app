@@ -7,6 +7,7 @@ const zoneIndicatorEl = document.getElementById("zone-indicator");
 const zoneStateEl = document.getElementById("zone-state");
 const zoneValueEl = document.getElementById("zone-value");
 const zoneCaptionEl = document.getElementById("zone-caption");
+const zoneStateAnnouncerEl = document.getElementById("zone-state-announcer");
 const readoutEl = document.getElementById("readout");
 const tripControlsEl = document.getElementById("trip-controls");
 const tripBtn = document.getElementById("trip-btn");
@@ -29,45 +30,117 @@ const appScreenEl = document.getElementById("app");
 const settingsScreenEl = document.getElementById("settings-screen");
 const settingsNavBtn = document.getElementById("settings-nav");
 const settingsBackBtn = document.getElementById("settings-back");
-const themeControlsEl = document.getElementById("theme-controls");
-const themeSwitchEl = document.getElementById("theme-switch");
-const fontControlsEl = document.getElementById("font-controls");
-const fontSwitchEl = document.getElementById("font-switch");
-const colorLevelControlsEl = document.getElementById("color-level-controls");
-const colorLevelSwitchEl = document.getElementById("color-level-switch");
-const modeControlsEl = document.getElementById("mode-controls");
-const modeSwitchEl = document.getElementById("mode-switch");
+const appearanceSwitchEl = document.getElementById("appearance-switch");
+const appearanceOptionEls = appearanceSwitchEl.querySelectorAll(".appearance-option");
 
-// --- DEV TOOL: palette + font + color-level + mode comparison ---------------
-// Applied at module scope (runs immediately on page load, before the auth
-// screen is even shown) so a saved preview theme/font/color-level/mode is
-// visible everywhere, not just on the dashboard where the switchers
-// themselves live. Remove this block and the :root[data-theme=...]/
-// [data-font=...]/[data-color-level=...]/[data-mode=...] CSS blocks before
-// shipping -- see css/style.css's comments above them.
-const THEME_STORAGE_KEY = "paceometer-theme-preview";
-const FONT_STORAGE_KEY = "paceometer-font-preview";
-// "2" is the baseline color level (today's default look, no CSS override
-// block needed for it) -- same role the empty string plays for theme/font,
-// so it's the one value that clears rather than sets the attribute.
-const COLOR_LEVEL_DEFAULT = "2";
-const COLOR_LEVEL_STORAGE_KEY = "paceometer-color-level-preview";
-const MODE_STORAGE_KEY = "paceometer-mode-preview";
-const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
-const savedFont = localStorage.getItem(FONT_STORAGE_KEY);
-const savedColorLevel = localStorage.getItem(COLOR_LEVEL_STORAGE_KEY);
-const savedMode = localStorage.getItem(MODE_STORAGE_KEY);
-if (savedTheme) {
-  document.documentElement.dataset.theme = savedTheme;
+// --- Appearance: light / dark (2026-07-22) -----------------------------
+// A real shipped setting, not a dev tool -- replaces the old color-level
+// and mode comparison tooling (color level 5 and the plain dark/light split
+// are what the user kept; see css/style.css's comments above the
+// :root[data-theme=...] blocks). "system" is the default: it clears the
+// attribute entirely so @media (prefers-color-scheme) in css/style.css
+// decides. Applied at module scope (runs before the auth screen is even
+// shown) so the choice is visible everywhere, not just on the dashboard.
+const APPEARANCE_STORAGE_KEY = "paceometer-appearance";
+const savedAppearance = localStorage.getItem(APPEARANCE_STORAGE_KEY) || "system";
+if (savedAppearance === "system") {
+  delete document.documentElement.dataset.theme;
+} else {
+  document.documentElement.dataset.theme = savedAppearance;
 }
-if (savedFont) {
-  document.documentElement.dataset.font = savedFont;
+
+// --- Viewport zoom, split by screen (2026-07-22 accessibility-audit
+// "your call" decision) ---------------------------------------------------
+// Pinch-zoom is disabled only while the live driving dashboard (#app) is
+// visible -- feeling like an instrument rather than a webpage, and
+// avoiding an accidental zoom while mounted in a car, are real reasons to
+// block it there. Neither reason applies to the auth or settings screens,
+// which are used stationary, and blocking zoom there has no safety benefit
+// while actively hurting a low-vision driver setting up the app. Called
+// from auth.js's showApp()/showAuth() and this file's settings-nav/back
+// listeners below -- not from startApp()/stopApp(), since those also run
+// on things unrelated to which screen is visible (e.g. simulated-drive
+// bookkeeping).
+const viewportMetaEl = document.querySelector('meta[name="viewport"]');
+const VIEWPORT_ZOOM_ENABLED = "width=device-width, initial-scale=1, viewport-fit=cover";
+const VIEWPORT_ZOOM_DISABLED = "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover";
+export function setViewportZoomEnabled(enabled) {
+  viewportMetaEl.setAttribute("content", enabled ? VIEWPORT_ZOOM_ENABLED : VIEWPORT_ZOOM_DISABLED);
 }
-if (savedColorLevel) {
-  document.documentElement.dataset.colorLevel = savedColorLevel;
+
+// --- Audio feedback (2026-07-22) ----------------------------------------
+// Web Audio API oscillator tones -- no audio files, no network dependency,
+// consistent with the project's zero-budget stack. Scope deliberately
+// limited to reinforcing existing signals (a state change that's already
+// on screen, a button tap that already changed the UI), not new coaching
+// content -- spoken pace/zone feedback was raised as a bigger step (closer
+// to active coaching than a passive display) and left for a separate
+// conversation with the professor; see TODO.md.
+// Browsers block audio until a user gesture unlocks it, so the context is
+// created lazily on the first tap anywhere on the page rather than waiting
+// specifically for a trip button -- the live zone indicator (and its
+// chime) can react to GPS before the driver ever starts a trip.
+let audioCtx = null;
+function getAudioContext() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === "suspended") {
+    audioCtx.resume();
+  }
+  return audioCtx;
 }
-if (savedMode) {
-  document.documentElement.dataset.mode = savedMode;
+document.addEventListener("pointerdown", getAudioContext, { once: true });
+
+function playTone(frequency, durationMs, volume = 0.2) {
+  const ctx = getAudioContext();
+  const oscillator = ctx.createOscillator();
+  const gain = ctx.createGain();
+  oscillator.type = "sine";
+  oscillator.frequency.value = frequency;
+  // Exponential fade-out (rather than a hard stop) avoids an audible click
+  // at the end of the tone.
+  gain.gain.setValueAtTime(volume, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + durationMs / 1000);
+  oscillator.connect(gain).connect(ctx.destination);
+  oscillator.start();
+  oscillator.stop(ctx.currentTime + durationMs / 1000);
+}
+
+// Zone-state change chime: pairs with the existing zone-flash animation
+// (see setZoneDisplay below) so a state change registers without looking
+// at the screen. Pitch signals valence rather than just "something
+// changed" -- green (still helps) rings higher than red (won't help),
+// matching the traffic-light mental model instead of an arbitrary beep.
+const ZONE_CHIME_FREQUENCIES = { green: 880, yellow: 660, red: 440 };
+function playZoneChangeChime(newState) {
+  playTone(ZONE_CHIME_FREQUENCIES[newState], 180);
+}
+
+// Haptic feedback (2026-07-22, accessibility-audit "your call" decision):
+// same trigger as the chime above, for a driver who's hard of hearing or
+// in a noisy car. Pulse count signals valence the same way chime pitch
+// does -- green is one short pulse, red is three, matching "more urgent"
+// rather than an arbitrary buzz. navigator.vibrate is missing entirely on
+// iOS Safari (never implemented) and simply does nothing there -- no
+// feature check needed beyond confirming the method exists.
+const ZONE_HAPTIC_PATTERNS = { green: [40], yellow: [40, 60, 40], red: [40, 60, 40, 60, 40] };
+function playZoneChangeHaptic(newState) {
+  if (navigator.vibrate) {
+    navigator.vibrate(ZONE_HAPTIC_PATTERNS[newState]);
+  }
+}
+
+// Trip start/end tones: a quick two-note pattern (rising to start, falling
+// to end) so it's distinguishable from the single-tone zone chime without
+// looking -- confirms the button tap registered.
+function playTripStartTone() {
+  playTone(520, 120);
+  setTimeout(() => playTone(780, 140), 110);
+}
+function playTripEndTone() {
+  playTone(780, 120);
+  setTimeout(() => playTone(520, 140), 110);
 }
 
 const MPS_TO_MPH = 2.23694;
@@ -251,7 +324,8 @@ function setZoneDisplay(marginalSeconds) {
   zoneValueEl.className = "zone-value " + zoneState;
   zoneIndicatorEl.className = "zone-indicator " + zoneState;
 
-  // Core Loop "state confirmed" cue: a brief flash the moment the state
+  // Core Loop "state confirmed" cue: a brief flash (plus a chime, added
+  // 2026-07-22 -- see playZoneChangeChime above) the moment the state
   // actually changes, so a change registers even mid-glance instead of
   // relying on the driver to notice a continuously-updating number.
   const stateChanged = previousZoneState !== null && previousZoneState !== zoneState;
@@ -262,6 +336,13 @@ function setZoneDisplay(marginalSeconds) {
     zoneIndicatorEl.classList.remove("zone-flash");
     void zoneIndicatorEl.offsetWidth;
     zoneIndicatorEl.classList.add("zone-flash");
+    playZoneChangeChime(zoneState);
+    playZoneChangeHaptic(zoneState);
+    // Screen-reader announcement (2026-07-22 accessibility pass): only on
+    // an actual state change, not every sample -- see the sr-only element's
+    // comment in index.html for why this is a separate node from the
+    // visible zone-indicator.
+    zoneStateAnnouncerEl.textContent = ZONE_STATE_LABELS[zoneState];
   }
 }
 
@@ -477,6 +558,7 @@ function stopWatching() {
 }
 
 function startTrip() {
+  playTripStartTone();
   trip = {
     startedAt: new Date(),
     sampleCount: 0,
@@ -557,14 +639,17 @@ tripSummaryDismissBtn.addEventListener("click", hideTripSummary);
 settingsNavBtn.addEventListener("click", () => {
   appScreenEl.classList.add("hidden");
   settingsScreenEl.classList.remove("hidden");
+  setViewportZoomEnabled(true);
 });
 
 settingsBackBtn.addEventListener("click", () => {
   settingsScreenEl.classList.add("hidden");
   appScreenEl.classList.remove("hidden");
+  setViewportZoomEnabled(false);
 });
 
 async function endTrip() {
+  playTripEndTone();
   const finishedTrip = trip;
   recording = false;
   trip = null;
@@ -800,67 +885,32 @@ simulateBtn.addEventListener("click", () => {
 });
 
 // Collapsed by default (2026-07-16) so this dev-only control doesn't
-// visually compete with the live readout -- one tap reveals it. Toggles the
-// theme/font/color-level/mode preview selects alongside the simulate
-// controls; all five live behind the same disclosure since all five are
-// dev-only.
+// visually compete with the live readout -- one tap reveals it.
 simulateToggleBtn.addEventListener("click", () => {
   const nowHidden = simulateControlsEl.classList.toggle("hidden");
-  themeControlsEl.classList.toggle("hidden", nowHidden);
-  fontControlsEl.classList.toggle("hidden", nowHidden);
-  colorLevelControlsEl.classList.toggle("hidden", nowHidden);
-  modeControlsEl.classList.toggle("hidden", nowHidden);
   simulateToggleBtn.textContent = nowHidden ? "Dev tools ▶" : "Dev tools ▾";
 });
 
-themeSwitchEl.value = savedTheme || "";
-themeSwitchEl.addEventListener("change", () => {
-  const value = themeSwitchEl.value;
-  if (value) {
-    document.documentElement.dataset.theme = value;
-    localStorage.setItem(THEME_STORAGE_KEY, value);
-  } else {
-    delete document.documentElement.dataset.theme;
-    localStorage.removeItem(THEME_STORAGE_KEY);
-  }
-});
+function setAppearanceButtonStates(value) {
+  appearanceOptionEls.forEach((btn) => {
+    btn.setAttribute("aria-pressed", String(btn.dataset.appearance === value));
+  });
+}
 
-fontSwitchEl.value = savedFont || "";
-fontSwitchEl.addEventListener("change", () => {
-  const value = fontSwitchEl.value;
-  if (value) {
-    document.documentElement.dataset.font = value;
-    localStorage.setItem(FONT_STORAGE_KEY, value);
-  } else {
-    delete document.documentElement.dataset.font;
-    localStorage.removeItem(FONT_STORAGE_KEY);
-  }
+setAppearanceButtonStates(savedAppearance);
+appearanceOptionEls.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const value = btn.dataset.appearance;
+    if (value === "system") {
+      delete document.documentElement.dataset.theme;
+      localStorage.removeItem(APPEARANCE_STORAGE_KEY);
+    } else {
+      document.documentElement.dataset.theme = value;
+      localStorage.setItem(APPEARANCE_STORAGE_KEY, value);
+    }
+    setAppearanceButtonStates(value);
+  });
 });
-
-colorLevelSwitchEl.value = savedColorLevel || COLOR_LEVEL_DEFAULT;
-colorLevelSwitchEl.addEventListener("change", () => {
-  const value = colorLevelSwitchEl.value;
-  if (value !== COLOR_LEVEL_DEFAULT) {
-    document.documentElement.dataset.colorLevel = value;
-    localStorage.setItem(COLOR_LEVEL_STORAGE_KEY, value);
-  } else {
-    delete document.documentElement.dataset.colorLevel;
-    localStorage.removeItem(COLOR_LEVEL_STORAGE_KEY);
-  }
-});
-
-modeSwitchEl.value = savedMode || "";
-modeSwitchEl.addEventListener("change", () => {
-  const value = modeSwitchEl.value;
-  if (value) {
-    document.documentElement.dataset.mode = value;
-    localStorage.setItem(MODE_STORAGE_KEY, value);
-  } else {
-    delete document.documentElement.dataset.mode;
-    localStorage.removeItem(MODE_STORAGE_KEY);
-  }
-});
-// --- end dev tool -----------------------------------------------------------
 
 export function startApp() {
   setStatus("searching for GPS…");
