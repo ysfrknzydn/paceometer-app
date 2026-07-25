@@ -23,6 +23,7 @@ const tripSummaryDismissBtn = document.getElementById("trip-summary-dismiss");
 const simulateToggleBtn = document.getElementById("simulate-toggle");
 const simulateControlsEl = document.getElementById("simulate-controls");
 const simulateProfileEl = document.getElementById("simulate-profile");
+const simulateSpeedLimitEl = document.getElementById("simulate-speed-limit");
 const simulateBtn = document.getElementById("simulate-btn");
 const simulateProgressEl = document.getElementById("simulate-progress");
 const simulateProgressFillEl = document.getElementById("simulate-progress-fill");
@@ -31,7 +32,9 @@ const settingsScreenEl = document.getElementById("settings-screen");
 const settingsNavBtn = document.getElementById("settings-nav");
 const settingsBackBtn = document.getElementById("settings-back");
 const appearanceSwitchEl = document.getElementById("appearance-switch");
-const appearanceOptionEls = appearanceSwitchEl.querySelectorAll(".appearance-option");
+const appearanceOptionEls = appearanceSwitchEl.querySelectorAll(".segmented-option");
+const zoneThresholdSwitchEl = document.getElementById("zone-threshold-switch");
+const zoneThresholdOptionEls = zoneThresholdSwitchEl.querySelectorAll(".segmented-option");
 
 // --- Appearance: light / dark (2026-07-22) -----------------------------
 // A real shipped setting, not a dev tool -- replaces the old color-level
@@ -110,9 +113,12 @@ function playTone(frequency, durationMs, volume = 0.2) {
 // Zone-state change chime: pairs with the existing zone-flash animation
 // (see setZoneDisplay below) so a state change registers without looking
 // at the screen. Pitch signals valence rather than just "something
-// changed" -- green (still helps) rings higher than red (won't help),
-// matching the traffic-light mental model instead of an arbitrary beep.
-const ZONE_CHIME_FREQUENCIES = { green: 880, yellow: 660, red: 440 };
+// changed" -- green (time adds up, i.e. lots of room) rings higher than red
+// (no time left to gain), matching the traffic-light mental model instead
+// of an arbitrary beep. "limit" (2026-07-25, at/above a known posted speed
+// limit) rings lowest of all -- the most urgent state, since it's a hard
+// legal boundary rather than just a diminishing-returns one.
+const ZONE_CHIME_FREQUENCIES = { green: 880, yellow: 660, red: 440, limit: 330 };
 function playZoneChangeChime(newState) {
   playTone(ZONE_CHIME_FREQUENCIES[newState], 180);
 }
@@ -120,11 +126,17 @@ function playZoneChangeChime(newState) {
 // Haptic feedback (2026-07-22, accessibility-audit "your call" decision):
 // same trigger as the chime above, for a driver who's hard of hearing or
 // in a noisy car. Pulse count signals valence the same way chime pitch
-// does -- green is one short pulse, red is three, matching "more urgent"
-// rather than an arbitrary buzz. navigator.vibrate is missing entirely on
-// iOS Safari (never implemented) and simply does nothing there -- no
-// feature check needed beyond confirming the method exists.
-const ZONE_HAPTIC_PATTERNS = { green: [40], yellow: [40, 60, 40], red: [40, 60, 40, 60, 40] };
+// does -- green is one short pulse, red is three, "limit" is four (most
+// urgent), matching "more urgent" rather than an arbitrary buzz.
+// navigator.vibrate is missing entirely on iOS Safari (never implemented)
+// and simply does nothing there -- no feature check needed beyond
+// confirming the method exists.
+const ZONE_HAPTIC_PATTERNS = {
+  green: [40],
+  yellow: [40, 60, 40],
+  red: [40, 60, 40, 60, 40],
+  limit: [40, 60, 40, 60, 40, 60, 40],
+};
 function playZoneChangeHaptic(newState) {
   if (navigator.vibrate) {
     navigator.vibrate(ZONE_HAPTIC_PATTERNS[newState]);
@@ -192,45 +204,64 @@ function paceSecondsFor(mph) {
 // tool (time_min - time_at_plus10) -- +10mph is chosen specifically because
 // it matches that report's worked examples (20->30mph saves 10.0min,
 // 70->80mph saves ~1.1min), so the app's numbers are directly checkable
-// against the report's. Per research_plan.qmd's open-questions note, "the
-// zone" is defined against this fixed reference speed rather than the
-// posted speed limit -- a speed-limit lookup has no free tier that fits a
-// zero-budget summer, and a fixed reference is the explicitly-chosen
-// default for this phase. ZONE_THRESHOLD_SECONDS is this project's own
-// design choice (not literature-derived, confirmed with the professor's
-// collaborator) for what counts as "meaningful": 60s puts the zone boundary
-// around ~73mph, so ordinary highway cruising still reads as "still helps"
-// and only clearly-speeding territory reads as diminishing returns.
+// against the report's. ZONE_THRESHOLD_SECONDS/ZONE_NEARING_THRESHOLD_SECONDS
+// are this project's own design choice (not literature-derived), for what
+// counts as "meaningful" -- see ZONE_THRESHOLD_PRESETS below, which makes
+// this a driver-adjustable setting rather than a fixed constant (2026-07-25
+// revision, per Helveston: "even a minute isn't saving much time" at the
+// original 60s default). This time-savings math is now also gated by a real
+// posted speed limit when one is known -- see the Overpass lookup and
+// nextZoneState below -- rather than being the only signal, as it was when
+// speed-limit lookups had no free tier.
 const ZONE_SPEED_INCREMENT_MPH = 10;
-const ZONE_THRESHOLD_SECONDS = 60;
 
-// Traffic-light display (2026-07-15 revision): a red/yellow/green readout
-// needs a second boundary above ZONE_THRESHOLD_SECONDS, marking "still
-// helps, but the gain is shrinking" apart from "clearly still helps."
-// Doubling the 60s threshold to 120s isn't itself literature-derived (like
-// ZONE_THRESHOLD_SECONDS, it's this project's own design choice), but on the
-// same t=d/v hyperbola it lands on an exact, clean 50mph boundary --
-// 360000/(v*(v+10)) = 120 solves to v = 50 exactly -- giving an explainable
-// pair: green below ~50mph, yellow ~50-73mph, red above ~73mph.
-const ZONE_NEARING_THRESHOLD_SECONDS = 120;
+// Driver-adjustable zone sensitivity (Settings -> Zone Sensitivity). Each
+// preset's nearingThresholdSeconds is exactly double thresholdSeconds, same
+// design-choice doubling the original 60s/120s pair used -- and it keeps
+// landing on clean mph boundaries by the same t=d/v hyperbola coincidence:
+// standard -> ~58.4mph / exactly 40mph, strict -> ~44.2mph / exactly 30mph,
+// strictest -> ~34.1mph / ~22.8mph. None of these specific numbers are
+// literature-derived; "standard" (90s) is Helveston's suggested default.
+const ZONE_THRESHOLD_PRESETS = {
+  standard: { label: "Standard", thresholdSeconds: 90 },
+  strict: { label: "Strict", thresholdSeconds: 150 },
+  strictest: { label: "Strictest", thresholdSeconds: 240 },
+};
+const ZONE_THRESHOLD_STORAGE_KEY = "paceometer-zone-threshold";
+const savedZoneThresholdKey =
+  localStorage.getItem(ZONE_THRESHOLD_STORAGE_KEY) || "standard";
+let ZONE_THRESHOLD_SECONDS =
+  ZONE_THRESHOLD_PRESETS[savedZoneThresholdKey].thresholdSeconds;
+let ZONE_NEARING_THRESHOLD_SECONDS = ZONE_THRESHOLD_SECONDS * 2;
 
 // Core Loop: "display confirms the new state" only means something if the
-// state is trustworthy. Right at the ~50mph/~73mph boundaries, GPS speed
-// noise alone (routinely 1-2mph) moves the marginal-seconds value by a few
-// seconds -- enough to flip the raw threshold back and forth on consecutive
-// fixes if you're cruising near one, which is a very normal place to sit.
-// This hysteresis band means the state only moves once the value clears a
+// state is trustworthy. Right at the zone boundaries (whichever preset is
+// active -- see ZONE_THRESHOLD_PRESETS above), GPS speed noise alone
+// (routinely 1-2mph) moves the marginal-seconds value by a few seconds --
+// enough to flip the raw threshold back and forth on consecutive fixes if
+// you're cruising near one, which is a very normal place to sit. This
+// hysteresis band means the state only moves once the value clears a
 // boundary by ZONE_HYSTERESIS_SECONDS in the new direction, so noise near a
 // boundary can't retrigger a flip -- confirmed with the professor's
 // collaborator, not a literature-derived number.
 const ZONE_HYSTERESIS_SECONDS = 5;
 
-zoneCaptionEl.textContent = `time saved at +${ZONE_SPEED_INCREMENT_MPH}mph`;
+// Default caption for the three time-savings states; overridden with the
+// known posted limit while zoneState is "limit" (see setZoneDisplay).
+const DEFAULT_ZONE_CAPTION = `time saved at +${ZONE_SPEED_INCREMENT_MPH}mph`;
+zoneCaptionEl.textContent = DEFAULT_ZONE_CAPTION;
 
+// Draft copy -- pending a comprehension-check pass, same process used for
+// the end-of-trip wording before. "limit" (2026-07-25) is reserved for the
+// new legal-speed-limit-aware state (see nextZoneState/handlePosition), so
+// yellow's old "NEARING THE LIMIT" label had to move off that word to avoid
+// the two concepts (zone-ceiling vs. posted limit) reading as the same
+// thing.
 const ZONE_STATE_LABELS = {
-  green: "SPEED STILL HELPS",
-  yellow: "NEARING THE LIMIT",
-  red: "SPEED WON'T HELP",
+  green: "TIME ADDS UP HERE",
+  yellow: "GAINS ARE SHRINKING",
+  red: "NO TIME LEFT TO GAIN",
+  limit: "AT THE SPEED LIMIT",
 };
 
 let zoneState = null; // "green" | "yellow" | "red", null until the first valid reading
@@ -262,11 +293,45 @@ function zoneCeilingMph() {
   );
 }
 
-// Applies hysteresis independently at each of the two boundaries. Using
-// plain sequential ifs (not else-if) lets a big single-fix jump cascade
-// through both boundaries in one call -- e.g. red straight to green if the
-// reading jumps from well below 60s to well above 130s.
-function nextZoneState(rounded, previous) {
+// Full gating (2026-07-25): when a real posted speed limit is known (see the
+// Overpass lookup below), the app must never suggest "still helps"/imply
+// speeding up further once the driver is at or above it -- even if the pure
+// time-savings math alone would say green/yellow (the whole point is to
+// avoid a "green means go faster" reading in, say, a school zone). The limit
+// check runs before the ordinary red/yellow/green math and can override it
+// entirely. SPEED_LIMIT_HYSTERESIS_MPH mirrors ZONE_HYSTERESIS_SECONDS's
+// purpose -- GPS speed noise (1-2mph) shouldn't flicker the state right at
+// the limit -- just in mph instead of seconds, since the limit boundary is
+// itself defined in mph, not marginal seconds. When a known limit isn't
+// available (lookup failed, no coverage, or the dev/simulated-drive path,
+// which always queries at (0,0) and finds nothing), this falls straight
+// through to the unchanged pure time-savings logic below.
+//
+// Applies hysteresis independently at each of the two time-savings
+// boundaries. Using plain sequential ifs (not else-if) lets a big single-fix
+// jump cascade through both boundaries in one call -- e.g. red straight to
+// green if the reading jumps from well below the red threshold to well
+// above the yellow one.
+function nextZoneState(rounded, previous, mph, knownSpeedLimitMph) {
+  if (knownSpeedLimitMph !== null) {
+    if (previous === "limit") {
+      if (mph >= knownSpeedLimitMph - SPEED_LIMIT_HYSTERESIS_MPH) {
+        return "limit";
+      }
+      // Dropped clearly below the limit -- fall through to the ordinary
+      // time-savings math below, starting fresh (the state machine wasn't
+      // tracking red/yellow/green while gated).
+      previous = null;
+    } else if (previous === null) {
+      // First reading: no prior state to protect from flicker, so no
+      // hysteresis buffer needed here either (matches the raw-threshold
+      // first-reading branch below).
+      if (mph >= knownSpeedLimitMph) return "limit";
+    } else if (mph >= knownSpeedLimitMph + SPEED_LIMIT_HYSTERESIS_MPH) {
+      return "limit";
+    }
+  }
+
   if (previous === null) {
     if (rounded < ZONE_THRESHOLD_SECONDS) return "red";
     if (rounded < ZONE_NEARING_THRESHOLD_SECONDS) return "yellow";
@@ -302,7 +367,7 @@ function formatDuration(totalSeconds) {
 // carries the magnitude, so the driver doesn't have to parse a sentence to
 // get it -- the state word alone answers "does it help", the number answers
 // "by how much", both readable well within the NHTSA 2s glance guideline.
-function setZoneDisplay(marginalSeconds) {
+function setZoneDisplay(marginalSeconds, mph, knownSpeedLimitMph) {
   const previousZoneState = zoneState;
 
   if (marginalSeconds === null) {
@@ -312,17 +377,22 @@ function setZoneDisplay(marginalSeconds) {
     zoneValueEl.textContent = "--";
     zoneValueEl.className = "zone-value";
     zoneIndicatorEl.className = "zone-indicator";
+    zoneCaptionEl.textContent = DEFAULT_ZONE_CAPTION;
     return;
   }
 
   const rounded = Math.round(marginalSeconds);
-  zoneState = nextZoneState(rounded, zoneState);
+  zoneState = nextZoneState(rounded, zoneState, mph, knownSpeedLimitMph);
 
   zoneStateEl.textContent = ZONE_STATE_LABELS[zoneState];
   zoneStateEl.className = "zone-state " + zoneState;
   zoneValueEl.textContent = formatDuration(rounded);
   zoneValueEl.className = "zone-value " + zoneState;
   zoneIndicatorEl.className = "zone-indicator " + zoneState;
+  zoneCaptionEl.textContent =
+    zoneState === "limit"
+      ? `posted limit: ~${Math.round(knownSpeedLimitMph)}mph`
+      : DEFAULT_ZONE_CAPTION;
 
   // Core Loop "state confirmed" cue: a brief flash (plus a chime, added
   // 2026-07-22 -- see playZoneChangeChime above) the moment the state
@@ -357,21 +427,20 @@ function setZoneDisplay(marginalSeconds) {
 // above it already is), so no good/bad color treatment.
 //
 // Second line added same day, later: the percentage alone doesn't say how
-// much time that translates to, and the end-of-trip summary was reworked to
-// lead with a concrete seconds value for exactly that reason (see
-// showTripSummary's revision note) -- so the live readout gets a running
-// version of that same number underneath, computed the same way
-// (secondsBehindPace in recordSample, same formula as endTrip's
-// secondsBehindPace). The two lines are two views of the same underlying
-// zone-tracking data (trip.inZoneSeconds/trip.inZoneMiles), not two
-// different metrics.
-function setTripZoneProgressDisplay(pctInZone, secondsBehindPace) {
+// much time that translates to. Reframed 2026-07-25 (see endTrip's
+// timeSavedBySpeedingSeconds comment): this is now a running version of
+// "how much did speeding actually save you against the posted limit," not
+// the old fixed-zone-ceiling framing -- computed from
+// trip.limitTrackedSeconds/idealSecondsAtLimit in recordSample, same formula
+// as endTrip's final number, so the live line and the end-of-trip headline
+// stay two views of the same underlying data, not two different framings.
+function setTripZoneProgressDisplay(pctInZone, timeSavedBySpeeding) {
   tripZoneProgressEl.textContent =
     pctInZone === null ? "" : `${Math.round(pctInZone)}% of trip in zone so far`;
   tripZoneProgressTimeEl.textContent =
-    secondsBehindPace === null
+    timeSavedBySpeeding === null
       ? ""
-      : `${formatDuration(secondsBehindPace)} behind the ~${Math.round(zoneCeilingMph())}mph efficient pace so far`;
+      : `${formatDuration(timeSavedBySpeeding)} faster than the speed limit so far`;
 }
 
 function haversineMeters(a, b) {
@@ -423,9 +492,24 @@ function recordSample(mph, timestamp) {
     const seconds = (timestamp - trip.lastSampleTimestamp) / 1000;
     if (zoneState !== null) {
       trip.trackedSeconds += seconds;
-      if (zoneState !== "red") {
+      if (zoneState !== "red" && zoneState !== "limit") {
         trip.inZoneSeconds += seconds;
         trip.inZoneMiles += mph * hours;
+      }
+    }
+
+    // Speed-limit tracking (2026-07-25): only counted when a real posted
+    // limit was actually known for this sample -- same "exclude unknown from
+    // both sides" principle as PACE_MIN_SPEED_MPH's exclusion above.
+    // idealSecondsAtLimit is the time this same distance would've taken at
+    // exactly the known limit; underLimitSeconds feeds pct_time_under_limit.
+    // Per-sample (mph/limit ratio) rather than a single fixed ceiling, since
+    // the real limit varies by road, unlike zoneCeilingMph's fixed constant.
+    if (knownSpeedLimitMph !== null) {
+      trip.limitTrackedSeconds += seconds;
+      trip.idealSecondsAtLimit += (mph / knownSpeedLimitMph) * seconds;
+      if (mph <= knownSpeedLimitMph) {
+        trip.underLimitSeconds += seconds;
       }
     }
   }
@@ -450,14 +534,13 @@ function recordSample(mph, timestamp) {
   const pctInZoneSoFar =
     trip.trackedSeconds > 0 ? (trip.inZoneSeconds / trip.trackedSeconds) * 100 : null;
 
-  // Running version of endTrip's secondsBehindPace -- same formula, same
-  // exclusion of red (already-at-ceiling) time from both sides.
-  const idealSecondsForInZoneMilesSoFar =
-    trip.inZoneMiles > 0 ? (trip.inZoneMiles / zoneCeilingMph()) * 3600 : 0;
-  const secondsBehindPaceSoFar =
-    trip.trackedSeconds > 0 ? Math.max(0, trip.inZoneSeconds - idealSecondsForInZoneMilesSoFar) : null;
+  // Running version of endTrip's timeSavedBySpeedingSeconds -- same formula.
+  const timeSavedBySpeedingSoFar =
+    trip.limitTrackedSeconds > 0
+      ? Math.max(0, trip.limitTrackedSeconds - trip.idealSecondsAtLimit)
+      : null;
 
-  setTripZoneProgressDisplay(pctInZoneSoFar, secondsBehindPaceSoFar);
+  setTripZoneProgressDisplay(pctInZoneSoFar, timeSavedBySpeedingSoFar);
 }
 
 // Real GPS chips (any phone) report coords.speed directly and reliably, so
@@ -475,11 +558,113 @@ function recordSample(mph, timestamp) {
 const MAX_FIX_ACCURACY_METERS = 100;
 const MAX_PLAUSIBLE_MPH = 200;
 
+// --- Speed limit lookup (2026-07-25) ---------------------------------------
+// Live posted-speed-limit awareness, so the zone display can gate on the
+// real legal limit instead of only the fixed time-savings hyperbola (see
+// nextZoneState). This is an explicit, discussed exception to the
+// no-raw-location-off-device rule: the driver's current lat/lng is sent,
+// transiently, to OpenStreetMap's public Overpass API on each lookup --
+// never stored by this app, never sent to Supabase, never logged to disk.
+// Throttled two ways (distance AND time) so an ordinary drive doesn't hammer
+// a free public API: a requery only fires once the driver has moved
+// meaningfully far *and* enough time has passed since the last one.
+const SPEED_LIMIT_API_URL = "https://overpass-api.de/api/interpreter";
+const SPEED_LIMIT_QUERY_RADIUS_METERS = 30;
+const SPEED_LIMIT_QUERY_MIN_DISTANCE_METERS = 150;
+const SPEED_LIMIT_QUERY_MIN_INTERVAL_MS = 15000;
+const SPEED_LIMIT_FETCH_TIMEOUT_MS = 8000;
+// Mirrors ZONE_HYSTERESIS_SECONDS's purpose but in mph, since the limit
+// boundary is itself defined in mph -- see nextZoneState.
+const SPEED_LIMIT_HYSTERESIS_MPH = 2;
+
+let knownSpeedLimitMph = null;
+let lastSpeedLimitQuery = null; // { coords, timestamp } of the last lookup fired
+let speedLimitQueryInFlight = false;
+// Dev-tool-only override (see simulated-drive block below) -- when set,
+// skips the real network lookup entirely so the "limit" state can be
+// exercised without a real drive.
+let devSpeedLimitOverrideMph = null;
+
+// OSM maxspeed values show up as "25 mph", a bare "50" (US ways are tagged
+// in mph explicitly; a bare number in this country means mph), "80 km/h", or
+// non-numeric values like "national"/"none" that aren't a usable limit.
+function parseMaxspeedTag(raw) {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim().toLowerCase();
+  const kmhMatch = trimmed.match(/^(\d+(?:\.\d+)?)\s*km\/?h$/);
+  if (kmhMatch) return parseFloat(kmhMatch[1]) * 0.621371;
+  const mphMatch = trimmed.match(/^(\d+(?:\.\d+)?)\s*mph$/);
+  if (mphMatch) return parseFloat(mphMatch[1]);
+  const bareMatch = trimmed.match(/^(\d+(?:\.\d+)?)$/);
+  if (bareMatch) return parseFloat(bareMatch[1]);
+  return null;
+}
+
+async function fetchSpeedLimitMph(coords) {
+  const query = `[out:json][timeout:10];way(around:${SPEED_LIMIT_QUERY_RADIUS_METERS},${coords.latitude},${coords.longitude})[highway][maxspeed];out tags;`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), SPEED_LIMIT_FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(SPEED_LIMIT_API_URL, {
+      method: "POST",
+      body: query,
+      signal: controller.signal,
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    for (const element of data.elements || []) {
+      const mph = parseMaxspeedTag(element.tags && element.tags.maxspeed);
+      if (mph !== null) return mph;
+    }
+    return null;
+  } catch {
+    // Network error, timeout, or malformed response -- a real failure means
+    // we genuinely don't know anymore, so the caller treats this the same
+    // as "no limit found" rather than reusing a possibly stale value.
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function maybeQuerySpeedLimit(coords, timestamp) {
+  if (devSpeedLimitOverrideMph !== null) return;
+  if (speedLimitQueryInFlight) return;
+
+  const distanceSinceLastQuery = lastSpeedLimitQuery
+    ? haversineMeters(lastSpeedLimitQuery.coords, coords)
+    : Infinity;
+  const timeSinceLastQuery = lastSpeedLimitQuery
+    ? timestamp - lastSpeedLimitQuery.timestamp
+    : Infinity;
+  const dueForRequery =
+    distanceSinceLastQuery > SPEED_LIMIT_QUERY_MIN_DISTANCE_METERS &&
+    timeSinceLastQuery > SPEED_LIMIT_QUERY_MIN_INTERVAL_MS;
+  if (!dueForRequery) return;
+
+  // Set immediately (before the await) so a slow response can't let a
+  // second fix's call slip through and fire a duplicate request.
+  lastSpeedLimitQuery = { coords, timestamp };
+  speedLimitQueryInFlight = true;
+  knownSpeedLimitMph = await fetchSpeedLimitMph(coords);
+  speedLimitQueryInFlight = false;
+}
+
 function handlePosition(position) {
   setStatus("live", "live");
 
   const { coords, timestamp } = position;
   let mph = null;
+
+  if (devSpeedLimitOverrideMph !== null) {
+    knownSpeedLimitMph = devSpeedLimitOverrideMph;
+  } else {
+    // Fire-and-forget: handlePosition stays synchronous, and the result
+    // (knownSpeedLimitMph) is picked up by whichever fix happens to run
+    // after it resolves -- speed limits don't change instant-to-instant, so
+    // this eventual consistency is fine.
+    maybeQuerySpeedLimit(coords, timestamp);
+  }
 
   // Prefer the device's own speed reading when it's available and trustworthy.
   if (coords.speed !== null && coords.speed >= 0) {
@@ -487,7 +672,8 @@ function handlePosition(position) {
   } else if (lastPosition) {
     // Fallback: derive speed from the distance/time delta between fixes.
     // The lat/lng themselves are used only for this in-memory calculation
-    // and are discarded immediately after -- never sent anywhere.
+    // and the transient Overpass lookup above -- never stored, never sent
+    // to Supabase, never logged.
     const distance = haversineMeters(lastPosition.coords, coords);
     const seconds = (timestamp - lastPosition.timestamp) / 1000;
     if (seconds > 0) {
@@ -498,7 +684,7 @@ function handlePosition(position) {
   if (mph !== null && mph <= MAX_PLAUSIBLE_MPH) {
     setSpeedDisplay(mph);
     setPaceDisplay(mph);
-    setZoneDisplay(marginalSecondsSaved(mph));
+    setZoneDisplay(marginalSecondsSaved(mph), mph, knownSpeedLimitMph);
     recordSample(mph, timestamp);
   }
 
@@ -572,6 +758,9 @@ function startTrip() {
     trackedSeconds: 0,
     inZoneSeconds: 0,
     inZoneMiles: 0,
+    limitTrackedSeconds: 0,
+    idealSecondsAtLimit: 0,
+    underLimitSeconds: 0,
   };
   recording = true;
   tripBtn.textContent = "End Trip";
@@ -598,25 +787,32 @@ function startTrip() {
 // consistent with the zone definition, but it reads as an instruction to
 // speed up past highway speeds, which is the opposite of the app's point,
 // and it doesn't distinguish "you barely left any time on the table" from
-// "you drove well under an efficient pace the whole trip." secondsBehindPace
-// (computed in endTrip via zoneCeilingMph) replaces the percentage with a
-// concrete number: actual seconds spent, specifically during the portion of
-// the trip where going faster would still have helped, above what the same
-// distance would have taken at the zone ceiling speed. A trip spent mostly
-// at/near the ceiling (like a normal highway drive) now shows a small
-// number; a trip spent well under an efficient pace shows a larger one --
-// see README's "How the pace/zone math works" for the full derivation.
-function showTripSummary(secondsBehindPace, distanceMiles, elapsedSeconds) {
+// "you drove well under an efficient pace the whole trip." Replaced the
+// percentage with a concrete seconds value for exactly that reason.
+//
+// 2026-07-25 revision: that concrete number itself got reframed again, from
+// "time left on the table" (secondsBehindPace vs. the fixed zoneCeilingMph
+// hyperbola) to "how much did speeding actually save you" (
+// timeSavedBySpeedingSeconds vs. the real posted speed limit, computed in
+// endTrip). The old framing still read as faulting the driver for not
+// speeding more; this one makes a small number the honest success case
+// (you barely gained anything by going over the limit) instead of a
+// shameful one -- directly matching the app's actual goal of encouraging
+// slower driving. Only available where a speed limit was actually known
+// (see the Overpass lookup in handlePosition) -- a trip driven entirely
+// somewhere without coverage, or the simulated-drive dev tool without its
+// speed-limit override set, falls back to "no speed limit data this trip."
+function showTripSummary(timeSavedBySpeedingSeconds, distanceMiles, elapsedSeconds) {
   readoutEl.classList.add("hidden");
   tripControlsEl.classList.add("hidden");
   tripSummaryEl.classList.remove("hidden");
 
-  if (secondsBehindPace === null) {
+  if (timeSavedBySpeedingSeconds === null) {
     tripSummaryValueEl.textContent = "--";
-    tripSummaryCaptionEl.textContent = "not enough data this trip";
+    tripSummaryCaptionEl.textContent = "no speed limit data this trip";
   } else {
-    tripSummaryValueEl.textContent = formatDuration(secondsBehindPace);
-    tripSummaryCaptionEl.textContent = `behind the ~${Math.round(zoneCeilingMph())}mph efficient pace`;
+    tripSummaryValueEl.textContent = formatDuration(timeSavedBySpeedingSeconds);
+    tripSummaryCaptionEl.textContent = "faster than if you'd strictly followed the speed limit";
   }
 
   const miles = distanceMiles.toFixed(1);
@@ -658,30 +854,34 @@ async function endTrip() {
   tripStatusEl.textContent = "";
 
   // pct_time_in_zone: still computed and still saved to Supabase below (the
-  // literature-adjacent 60s/~73mph threshold hasn't changed, and this
-  // number is useful for research analysis), just no longer the headline UI
-  // number -- see showTripSummary's comment for why.
+  // time-savings threshold math hasn't changed in kind, just become
+  // adjustable -- see ZONE_THRESHOLD_PRESETS), just no longer the headline
+  // UI number -- see showTripSummary's comment for why.
   const pctInZone =
     finishedTrip.trackedSeconds > 0
       ? (finishedTrip.inZoneSeconds / finishedTrip.trackedSeconds) * 100
       : null;
 
-  // Ideal time to cover finishedTrip.inZoneMiles at the zone ceiling speed,
-  // vs. the actual time spent covering those same miles -- see
-  // zoneCeilingMph's comment and showTripSummary's 2026-07-15 revision note.
-  // Clamped at 0: floating-point rounding on the boundary samples could
-  // otherwise produce a tiny negative value.
-  const idealSecondsForInZoneMiles =
-    finishedTrip.inZoneMiles > 0
-      ? (finishedTrip.inZoneMiles / zoneCeilingMph()) * 3600
-      : 0;
-  const secondsBehindPace =
-    finishedTrip.trackedSeconds > 0
-      ? Math.max(0, finishedTrip.inZoneSeconds - idealSecondsForInZoneMiles)
+  // Reframed 2026-07-25: how much did speeding actually save you against the
+  // real posted speed limit, rather than the old fixed zone-ceiling
+  // "time left on the table" framing -- see showTripSummary's revision note.
+  // Only meaningful where a speed limit was actually known for at least some
+  // of the trip (limitTrackedSeconds > 0); a trip with no coverage at all
+  // (or the simulated-drive dev tool without its override set) has nothing
+  // to compare against. Clamped at 0: floating-point rounding on boundary
+  // samples, or a trip driven entirely at/under the limit, could otherwise
+  // produce a tiny/negative value where there's nothing to report.
+  const timeSavedBySpeedingSeconds =
+    finishedTrip.limitTrackedSeconds > 0
+      ? Math.max(0, finishedTrip.limitTrackedSeconds - finishedTrip.idealSecondsAtLimit)
+      : null;
+  const pctTimeUnderLimit =
+    finishedTrip.limitTrackedSeconds > 0
+      ? (finishedTrip.underLimitSeconds / finishedTrip.limitTrackedSeconds) * 100
       : null;
 
   const elapsedSeconds = (Date.now() - finishedTrip.startedAt.getTime()) / 1000;
-  showTripSummary(secondsBehindPace, finishedTrip.distanceMiles, elapsedSeconds);
+  showTripSummary(timeSavedBySpeedingSeconds, finishedTrip.distanceMiles, elapsedSeconds);
   tripSummarySaveStatusEl.textContent = "Saving…";
 
   const {
@@ -713,6 +913,7 @@ async function endTrip() {
     sample_count: finishedTrip.sampleCount,
     avg_pace_seconds: avgPaceSeconds,
     pct_time_in_zone: pctInZone,
+    pct_time_under_limit: pctTimeUnderLimit,
   });
 
   tripBtn.disabled = false;
@@ -838,6 +1039,12 @@ function startSimulatedDrive() {
   if (simulationInterval !== null) return;
   stopWatching();
 
+  // Optional dev-only override so the "limit" zone state (and its colors/
+  // chime/haptic/trip-summary reframing) can be exercised without a real
+  // drive -- skips the real Overpass call entirely while set.
+  const parsedLimit = parseFloat(simulateSpeedLimitEl.value);
+  devSpeedLimitOverrideMph = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : null;
+
   const profile = SIMULATED_DRIVE_PROFILES[simulateProfileEl.value];
   const startedAt = Date.now();
   const totalDuration = profile[profile.length - 1].untilSecond;
@@ -859,6 +1066,7 @@ function startSimulatedDrive() {
   }, 1000);
 
   simulateProfileEl.disabled = true;
+  simulateSpeedLimitEl.disabled = true;
   simulateBtn.textContent = "Stop Simulated Drive";
   simulateProgressEl.classList.remove("hidden");
   simulateProgressFillEl.style.width = "0%";
@@ -869,7 +1077,10 @@ function stopSimulatedDrive() {
   clearInterval(simulationInterval);
   simulationInterval = null;
   lastPosition = null;
+  devSpeedLimitOverrideMph = null;
+  knownSpeedLimitMph = null;
   simulateProfileEl.disabled = false;
+  simulateSpeedLimitEl.disabled = false;
   simulateBtn.textContent = "Start Simulated Drive";
   simulateProgressEl.classList.add("hidden");
   simulateProgressFillEl.style.width = "0%";
@@ -912,6 +1123,24 @@ appearanceOptionEls.forEach((btn) => {
   });
 });
 
+function setZoneThresholdButtonStates(key) {
+  zoneThresholdOptionEls.forEach((btn) => {
+    btn.setAttribute("aria-pressed", String(btn.dataset.zoneThreshold === key));
+  });
+}
+
+function applyZoneThresholdPreset(key) {
+  ZONE_THRESHOLD_SECONDS = ZONE_THRESHOLD_PRESETS[key].thresholdSeconds;
+  ZONE_NEARING_THRESHOLD_SECONDS = ZONE_THRESHOLD_SECONDS * 2;
+  localStorage.setItem(ZONE_THRESHOLD_STORAGE_KEY, key);
+  setZoneThresholdButtonStates(key);
+}
+
+setZoneThresholdButtonStates(savedZoneThresholdKey);
+zoneThresholdOptionEls.forEach((btn) => {
+  btn.addEventListener("click", () => applyZoneThresholdPreset(btn.dataset.zoneThreshold));
+});
+
 export function startApp() {
   setStatus("searching for GPS…");
   setSpeedDisplay(0);
@@ -925,7 +1154,10 @@ export function stopApp() {
   if (simulationInterval !== null) {
     clearInterval(simulationInterval);
     simulationInterval = null;
+    devSpeedLimitOverrideMph = null;
+    knownSpeedLimitMph = null;
     simulateProfileEl.disabled = false;
+    simulateSpeedLimitEl.disabled = false;
     simulateBtn.textContent = "Start Simulated Drive";
     simulateProgressEl.classList.add("hidden");
     simulateProgressFillEl.style.width = "0%";

@@ -113,6 +113,7 @@
           <option value="highway">Highway</option>
           <option value="rural">Rural</option>
         </select>
+        <input id="simulate-speed-limit" class="simulate-speed-limit" type="number" placeholder="sim. speed limit mph (optional)" min="0">
         <button id="simulate-btn" class="simulate-btn" type="button">Start Simulated Drive</button>
       </div>
       <div id="simulate-progress" class="simulate-progress hidden">
@@ -149,11 +150,11 @@
           </span>
           About Paceometer
         </h2>
-        <p>Instead of just showing your speed, Paceometer shows how much time speeding up would actually save you, plus a traffic-light color so you can tell at a glance whether it's still worth it.</p>
+        <p>Instead of just showing your speed, Paceometer shows how much time speeding up would actually save you, plus a color so you can tell at a glance whether it's worth it — and where the posted speed limit is known, the app never suggests going faster than what's legal, no matter what the time math alone would say.</p>
         <p><strong>The pace number</strong> (minutes to cover 10 miles at your current speed) is based on a real published study (Peer &amp; Gamliel, 2013), which found that showing drivers this number instead of just mph made them much better at judging how much time speeding up would actually save.</p>
-        <p><strong>The traffic light:</strong> green means going 10mph faster would still save meaningful time; yellow means that gain is shrinking; red means going faster wouldn't meaningfully save you any time at all. These specific speed cutoffs (around 50mph and 73mph) are this app's own design choice, not from a published study — chosen because they land on clean, round numbers within the same math as the pace formula above.</p>
-        <p><strong>The end-of-trip number</strong> is how many seconds you spent going slower than the fastest pace that would've actually helped, counted only over the parts of the trip where speeding up would have mattered. A small number is a good sign — it means you were already driving close to an efficient pace.</p>
-        <p>What this app doesn't know: the speed limit or how safe a road is. It only answers the time-savings math above, nothing else — so "green" never means a road is safe to speed on.</p>
+        <p><strong>The color indicator:</strong> it reflects how much time going 10mph faster would actually save — one color means that gain is still meaningful, another means it's shrinking, another means there's basically nothing left to gain. A fourth, distinct color takes priority over all of that whenever you're at or above a posted speed limit the app knows about. How big a time savings counts as "meaningful" is adjustable in Settings under Zone Sensitivity — none of these specific cutoffs are from a published study; they're this app's own design choice (informed by the research team's guidance), chosen to land on clean, round numbers within the same math as the pace formula above.</p>
+        <p><strong>The end-of-trip number</strong> is how much time you actually gained by driving faster than the posted speed limit, counted only over the parts of the trip where a limit was known. A small number is the good sign here — it means speeding barely bought you anything.</p>
+        <p>When it's available, this app looks up the posted speed limit near you (from OpenStreetMap) so it never tells you to go faster than what's legal. That data isn't always complete, and how safe a specific road actually is is still something this app doesn't know — a known limit changes the color, but it's never a promise that a road is safe to drive at that speed.</p>
       </section>
 
       <section class="settings-section settings-section--accent-2">
@@ -165,8 +166,8 @@
           </span>
           Privacy
         </h2>
-        <p>Your raw location (GPS coordinates) is never sent anywhere or stored — it stays on your phone the whole time, used only to calculate your speed in the moment.</p>
-        <p>When you end a trip, only summary numbers are saved: average/min/max speed, distance, and how much of the trip was in the "still helps" zone. No route and no coordinates ever leave your phone.</p>
+        <p>Your raw GPS location is used two ways: entirely on your phone to calculate your speed in the moment, and briefly sent to OpenStreetMap's free public speed-limit lookup (a service called Overpass) so the app can tell what the posted limit is near you. That lookup is transient — it's never stored by Paceometer, never sent to our database, and never logged anywhere.</p>
+        <p>When you end a trip, only summary numbers are saved: average/min/max speed, distance, pace, and how much of the trip was spent where speeding up still meaningfully helped or at/under the posted speed limit. No route and no coordinates ever leave your phone or reach our database.</p>
         <p>Only you can see your own trips — the database is locked down so each signed-in driver can only read their own data.</p>
       </section>
 
@@ -181,10 +182,27 @@
           Appearance
         </h2>
         <p>Follows your phone's light/dark setting by default. Override it here if you'd like.</p>
-        <div id="appearance-switch" class="appearance-switch" role="group" aria-label="Appearance">
-          <button type="button" class="appearance-option" data-appearance="system">System</button>
-          <button type="button" class="appearance-option" data-appearance="light">Light</button>
-          <button type="button" class="appearance-option" data-appearance="dark">Dark</button>
+        <div id="appearance-switch" class="segmented-control" role="group" aria-label="Appearance">
+          <button type="button" class="segmented-option" data-appearance="system">System</button>
+          <button type="button" class="segmented-option" data-appearance="light">Light</button>
+          <button type="button" class="segmented-option" data-appearance="dark">Dark</button>
+        </div>
+      </section>
+
+      <section class="settings-section settings-section--accent-2">
+        <h2>
+          <span class="settings-icon-chip settings-icon-chip--accent-2">
+            <svg class="settings-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path d="M4 18 9 8l4 6 3-4 4 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          Zone Sensitivity
+        </h2>
+        <p>How much time speeding up must save before the app calls it worthwhile. Standard matches Helveston's guidance; Strict and Strictest ask for a bigger payoff before agreeing it helps, which pushes the "no time left to gain" state to kick in at a lower speed.</p>
+        <div id="zone-threshold-switch" class="segmented-control" role="group" aria-label="Zone sensitivity">
+          <button type="button" class="segmented-option" data-zone-threshold="standard">Standard</button>
+          <button type="button" class="segmented-option" data-zone-threshold="strict">Strict</button>
+          <button type="button" class="segmented-option" data-zone-threshold="strictest">Strictest</button>
         </div>
       </section>
 

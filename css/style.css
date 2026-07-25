@@ -367,6 +367,18 @@ html, body {
   color: #f87171;
 }
 
+/* "limit" (2026-07-25): at/above a known posted speed limit -- a hard legal
+   boundary, not just diminishing time-savings returns, so it gets its own
+   color distinct from green/yellow/red (violet) rather than reusing red's. */
+.zone-indicator.limit {
+  border-color: #c084fc;
+  background: rgba(192, 132, 252, 0.08);
+}
+.zone-state.limit,
+.zone-value.limit {
+  color: #c084fc;
+}
+
 /* Core Loop "state confirmed" cue: a brief outward ring pulse, color-matched
    to the zone, the moment the state actually flips. */
 @keyframes zone-flash-green {
@@ -381,6 +393,10 @@ html, body {
   0% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.55); }
   100% { box-shadow: 0 0 0 16px rgba(248, 113, 113, 0); }
 }
+@keyframes zone-flash-limit {
+  0% { box-shadow: 0 0 0 0 rgba(192, 132, 252, 0.55); }
+  100% { box-shadow: 0 0 0 16px rgba(192, 132, 252, 0); }
+}
 .zone-indicator.green.zone-flash {
   animation: zone-flash-green 0.6s ease-out;
 }
@@ -389,6 +405,9 @@ html, body {
 }
 .zone-indicator.red.zone-flash {
   animation: zone-flash-red 0.6s ease-out;
+}
+.zone-indicator.limit.zone-flash {
+  animation: zone-flash-limit 0.6s ease-out;
 }
 
 /* Respect prefers-reduced-motion (2026-07-22 accessibility pass): the pulse
@@ -399,7 +418,8 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
   .zone-indicator.green.zone-flash,
   .zone-indicator.yellow.zone-flash,
-  .zone-indicator.red.zone-flash {
+  .zone-indicator.red.zone-flash,
+  .zone-indicator.limit.zone-flash {
     animation: none;
   }
 }
@@ -515,6 +535,7 @@ html, body {
 /* Dev tool -- deliberately styled so it reads as "not a real app control". */
 .simulate-controls {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   width: 100%;
   max-width: 280px;
@@ -523,6 +544,20 @@ html, body {
 
 .simulate-profile {
   flex: 1;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.6rem 0.4rem;
+  border-radius: 10px;
+  border: 1px dashed #f59e0b;
+  background: #17171c;
+  color: #f59e0b;
+}
+
+/* Dev-tool-only override for testing the "limit" zone state (see
+   devSpeedLimitOverrideMph in app.js) without a real Overpass lookup. Full
+   width of its own row so the profile+button row above doesn't get cramped. */
+.simulate-speed-limit {
+  flex: 1 1 100%;
   font-size: 0.8rem;
   font-weight: 600;
   padding: 0.6rem 0.4rem;
@@ -671,16 +706,18 @@ html, body {
   margin-bottom: 0;
 }
 
-/* Appearance segmented control (2026-07-22) -- System/Light/Dark, wired in
-   js/app.js. The active option gets a filled accent background; the other
-   two stay plain so the current choice reads at a glance. */
-.appearance-switch {
+/* Generic segmented control (2026-07-22, genericized 2026-07-25) -- used by
+   both the Appearance (System/Light/Dark) and Zone Sensitivity
+   (Standard/Strict/Strictest) settings, wired in js/app.js. The active
+   option gets a filled accent background; the other two stay plain so the
+   current choice reads at a glance. */
+.segmented-control {
   display: flex;
   gap: 0.4rem;
   margin-top: 0.9rem;
 }
 
-.appearance-option {
+.segmented-option {
   flex: 1;
   /* min-height 44px (2026-07-22 accessibility pass): the previous 0.55rem
      vertical padding alone measured to roughly 34px, under both Apple's
@@ -700,7 +737,7 @@ html, body {
   font-weight: 600;
 }
 
-.appearance-option[aria-pressed="true"] {
+.segmented-option[aria-pressed="true"] {
   background: var(--button-bg-eff);
   border-color: transparent;
   color: var(--accent-text);
@@ -808,6 +845,11 @@ html, body {
     padding: 0.4rem 0.5rem;
   }
 
+  .simulate-speed-limit {
+    font-size: 0.7rem;
+    padding: 0.4rem 0.5rem;
+  }
+
   .simulate-btn {
     font-size: 0.75rem;
     padding: 0.5rem 0.75rem;
@@ -873,9 +915,11 @@ html, body {
   .zone-indicator.green { background: rgba(74, 222, 128, 0.16); border-color: #166534; }
   .zone-indicator.yellow { background: rgba(250, 204, 21, 0.18); border-color: #854d0e; }
   .zone-indicator.red { background: rgba(248, 113, 113, 0.16); border-color: #991b1b; }
+  .zone-indicator.limit { background: rgba(192, 132, 252, 0.18); border-color: #5b21b6; }
   .zone-state.green, .zone-value.green { color: #166534; }
   .zone-state.yellow, .zone-value.yellow { color: #854d0e; }
   .zone-state.red, .zone-value.red { color: #991b1b; }
+  .zone-state.limit, .zone-value.limit { color: #5b21b6; }
   /* Six more hardcoded/token-based colors caught by a direct axe-core scan
      (2026-07-22) -- Lighthouse's single-page-load pass only ever saw the
      auth screen, so it missed these on the dashboard/settings screens
@@ -911,9 +955,11 @@ html, body {
 :root[data-theme="light"] .zone-indicator.green { background: rgba(74, 222, 128, 0.16); border-color: #166534; }
 :root[data-theme="light"] .zone-indicator.yellow { background: rgba(250, 204, 21, 0.18); border-color: #854d0e; }
 :root[data-theme="light"] .zone-indicator.red { background: rgba(248, 113, 113, 0.16); border-color: #991b1b; }
+:root[data-theme="light"] .zone-indicator.limit { background: rgba(192, 132, 252, 0.18); border-color: #5b21b6; }
 :root[data-theme="light"] .zone-state.green, :root[data-theme="light"] .zone-value.green { color: #166534; }
 :root[data-theme="light"] .zone-state.yellow, :root[data-theme="light"] .zone-value.yellow { color: #854d0e; }
 :root[data-theme="light"] .zone-state.red, :root[data-theme="light"] .zone-value.red { color: #991b1b; }
+:root[data-theme="light"] .zone-state.limit, :root[data-theme="light"] .zone-value.limit { color: #5b21b6; }
 :root[data-theme="light"] .status { color: var(--text-secondary); }
 :root[data-theme="light"] .status.live { color: #166534; }
 :root[data-theme="light"] .pace { color: var(--extra-tint); }
@@ -950,6 +996,8 @@ html, body {
 :root[data-theme="dark"] .zone-indicator.green { background: rgba(74, 222, 128, 0.08); border-color: #4ade80; }
 :root[data-theme="dark"] .zone-indicator.yellow { background: rgba(250, 204, 21, 0.08); border-color: #facc15; }
 :root[data-theme="dark"] .zone-indicator.red { background: rgba(248, 113, 113, 0.08); border-color: #f87171; }
+:root[data-theme="dark"] .zone-indicator.limit { background: rgba(192, 132, 252, 0.08); border-color: #c084fc; }
 :root[data-theme="dark"] .zone-state.green, :root[data-theme="dark"] .zone-value.green { color: #4ade80; }
 :root[data-theme="dark"] .zone-state.yellow, :root[data-theme="dark"] .zone-value.yellow { color: #facc15; }
 :root[data-theme="dark"] .zone-state.red, :root[data-theme="dark"] .zone-value.red { color: #f87171; }
+:root[data-theme="dark"] .zone-state.limit, :root[data-theme="dark"] .zone-value.limit { color: #c084fc; }
