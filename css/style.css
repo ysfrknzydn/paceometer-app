@@ -506,6 +506,19 @@ html, body {
   color: var(--text-primary);
 }
 
+/* Qualifier on the trip-summary number ("only 15s") -- deliberately much
+   smaller than the 5rem number it precedes, so it reads as a caveat on the
+   number rather than part of it. See showTripSummary's comment in app.js:
+   the whole point of this stat is to read as a small, unimpressive gain,
+   never a score to chase. */
+.trip-summary-value-prefix {
+  font-family: var(--font-body);
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  vertical-align: 0.6rem;
+}
+
 .trip-summary-caption {
   margin-top: 0.5rem;
   font-size: 1.05rem;
@@ -616,6 +629,43 @@ html, body {
   background: none;
   border: none;
   color: var(--text-secondary);
+  line-height: 1;
+}
+
+/* Always-on speed limit sign (2026-07-26) -- mirrors the settings-nav gear's
+   corner placement/margin on the opposite side, so the two feel like a
+   matched pair of fixed HUD elements rather than one-off placements.
+   Deliberately real-sign colors (white/red/black) rather than themed
+   variables -- a road sign doesn't change appearance in dark mode, and
+   staying visually literal is what makes it instantly readable at a glance,
+   the same reasoning as not color-theming the zone-indicator's semantic
+   green/yellow/red/limit colors elsewhere in this file. */
+.speed-limit-sign {
+  position: absolute;
+  top: max(env(safe-area-inset-top), 16px);
+  right: max(env(safe-area-inset-right), 16px);
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #fff;
+  border: 5px solid #c8102e;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s ease;
+}
+
+.speed-limit-sign.hidden {
+  display: none;
+}
+
+.speed-limit-sign-value {
+  font-family: var(--font-numeric);
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #111;
+  font-variant-numeric: tabular-nums;
   line-height: 1;
 }
 

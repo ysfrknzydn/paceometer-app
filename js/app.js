@@ -8,6 +8,8 @@ const zoneStateEl = document.getElementById("zone-state");
 const zoneValueEl = document.getElementById("zone-value");
 const zoneCaptionEl = document.getElementById("zone-caption");
 const zoneStateAnnouncerEl = document.getElementById("zone-state-announcer");
+const speedLimitSignEl = document.getElementById("speed-limit-sign");
+const speedLimitSignValueEl = document.getElementById("speed-limit-sign-value");
 const readoutEl = document.getElementById("readout");
 const tripControlsEl = document.getElementById("trip-controls");
 const tripBtn = document.getElementById("trip-btn");
@@ -35,6 +37,8 @@ const appearanceSwitchEl = document.getElementById("appearance-switch");
 const appearanceOptionEls = appearanceSwitchEl.querySelectorAll(".segmented-option");
 const zoneThresholdSwitchEl = document.getElementById("zone-threshold-switch");
 const zoneThresholdOptionEls = zoneThresholdSwitchEl.querySelectorAll(".segmented-option");
+const soundSwitchEl = document.getElementById("sound-switch");
+const soundOptionEls = soundSwitchEl.querySelectorAll(".segmented-option");
 
 // --- Appearance: light / dark (2026-07-22) -----------------------------
 // A real shipped setting, not a dev tool -- replaces the old color-level
@@ -95,7 +99,17 @@ function getAudioContext() {
 }
 document.addEventListener("pointerdown", getAudioContext, { once: true });
 
+// Mute (2026-07-26): silences every tone this app generates (zone chime,
+// trip start/end) in one place, since they all route through playTone --
+// deliberately leaves haptic feedback (playZoneChangeHaptic) untouched, as
+// the point is avoiding clashes with music/calls, not suppressing feedback
+// altogether for a driver who relies on the buzz.
+const SOUND_STORAGE_KEY = "paceometer-sound";
+const savedSound = localStorage.getItem(SOUND_STORAGE_KEY) || "on";
+let soundMuted = savedSound === "muted";
+
 function playTone(frequency, durationMs, volume = 0.2) {
+  if (soundMuted) return;
   const ctx = getAudioContext();
   const oscillator = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -313,6 +327,14 @@ function zoneCeilingMph() {
 // green if the reading jumps from well below the red threshold to well
 // above the yellow one.
 function nextZoneState(rounded, previous, mph, knownSpeedLimitMph) {
+  if (previous === "limit" && knownSpeedLimitMph === null) {
+    // The limit that gated the previous reading is no longer known (lookup
+    // failed, or the driver left mapped-road coverage) -- nothing left to
+    // gate on, so restart the ordinary time-savings state machine fresh
+    // rather than getting stuck reporting "limit" forever.
+    previous = null;
+  }
+
   if (knownSpeedLimitMph !== null) {
     if (previous === "limit") {
       if (mph >= knownSpeedLimitMph - SPEED_LIMIT_HYSTERESIS_MPH) {
@@ -416,6 +438,23 @@ function setZoneDisplay(marginalSeconds, mph, knownSpeedLimitMph) {
   }
 }
 
+// Always-on speed limit sign (2026-07-26): a real, permanent feature (not
+// behind the "Dev tools" disclosure) showing whatever knownSpeedLimitMph
+// currently is -- the same value the zone-gating logic above already
+// tracks, just surfaced directly rather than only implied by the "limit"
+// zone state. Hidden entirely rather than showing "--" when no limit is
+// known, since an empty sign reads as broken/uninformative in a way the
+// zone indicator's "--" placeholder doesn't (that one's inside a labeled
+// card; this is a bare sign floating in a corner).
+function setSpeedLimitSignDisplay(knownSpeedLimitMph) {
+  if (knownSpeedLimitMph === null) {
+    speedLimitSignEl.classList.add("hidden");
+    return;
+  }
+  speedLimitSignValueEl.textContent = Math.round(knownSpeedLimitMph);
+  speedLimitSignEl.classList.remove("hidden");
+}
+
 // Live in-trip readout (2026-07-15 revision): replaces the old "vs 55mph"
 // baseline comparison, which had gone inconsistent with the zone-based
 // framing the end-of-trip summary uses (see showTripSummary below). This is
@@ -437,10 +476,16 @@ function setZoneDisplay(marginalSeconds, mph, knownSpeedLimitMph) {
 function setTripZoneProgressDisplay(pctInZone, timeSavedBySpeeding) {
   tripZoneProgressEl.textContent =
     pctInZone === null ? "" : `${Math.round(pctInZone)}% of trip in zone so far`;
+  // "only" (2026-07-26): the previous "Xs faster than the speed limit so
+  // far" read as a live scoreboard egging the driver on to make the number
+  // go up. The app's whole point is the opposite -- showing how little
+  // speeding actually buys you -- so this always frames the number as a
+  // small, unimpressive one, never a gain to chase. Same fix applied to the
+  // end-of-trip headline in showTripSummary below.
   tripZoneProgressTimeEl.textContent =
     timeSavedBySpeeding === null
       ? ""
-      : `${formatDuration(timeSavedBySpeeding)} faster than the speed limit so far`;
+      : `only ${formatDuration(timeSavedBySpeeding)} faster than the speed limit so far`;
 }
 
 function haversineMeters(a, b) {
@@ -535,9 +580,13 @@ function recordSample(mph, timestamp) {
     trip.trackedSeconds > 0 ? (trip.inZoneSeconds / trip.trackedSeconds) * 100 : null;
 
   // Running version of endTrip's timeSavedBySpeedingSeconds -- same formula.
+  // idealSecondsAtLimit (time to cover this distance at the limit) minus
+  // limitTrackedSeconds (actual time taken) -- speeding covers the same
+  // distance in less real time, so the ideal-at-limit number is the larger
+  // one when there's genuine time saved.
   const timeSavedBySpeedingSoFar =
     trip.limitTrackedSeconds > 0
-      ? Math.max(0, trip.limitTrackedSeconds - trip.idealSecondsAtLimit)
+      ? Math.max(0, trip.idealSecondsAtLimit - trip.limitTrackedSeconds)
       : null;
 
   setTripZoneProgressDisplay(pctInZoneSoFar, timeSavedBySpeedingSoFar);
@@ -665,6 +714,7 @@ function handlePosition(position) {
     // this eventual consistency is fine.
     maybeQuerySpeedLimit(coords, timestamp);
   }
+  setSpeedLimitSignDisplay(knownSpeedLimitMph);
 
   // Prefer the device's own speed reading when it's available and trustworthy.
   if (coords.speed !== null && coords.speed >= 0) {
@@ -811,7 +861,13 @@ function showTripSummary(timeSavedBySpeedingSeconds, distanceMiles, elapsedSecon
     tripSummaryValueEl.textContent = "--";
     tripSummaryCaptionEl.textContent = "no speed limit data this trip";
   } else {
-    tripSummaryValueEl.textContent = formatDuration(timeSavedBySpeedingSeconds);
+    // "only" (2026-07-26): reframes this as the honest small-gain success
+    // case, not a number to be proud of growing -- see setTripZoneProgressDisplay's
+    // matching comment for the live version of this same fix. Styled as a
+    // smaller prefix (not jammed into the 5rem numeric font) so it still
+    // reads as a qualifier on the number, not part of the number itself.
+    tripSummaryValueEl.innerHTML =
+      `<span class="trip-summary-value-prefix">only</span> ${formatDuration(timeSavedBySpeedingSeconds)}`;
     tripSummaryCaptionEl.textContent = "faster than if you'd strictly followed the speed limit";
   }
 
@@ -852,6 +908,10 @@ async function endTrip() {
   tripBtn.textContent = "Start Trip";
   tripBtn.disabled = true;
   tripStatusEl.textContent = "";
+  // Otherwise the last trip's numbers stay visible under the "Start Trip"
+  // button once the trip summary is dismissed, until a new trip actually
+  // starts recording samples.
+  setTripZoneProgressDisplay(null, null);
 
   // pct_time_in_zone: still computed and still saved to Supabase below (the
   // time-savings threshold math hasn't changed in kind, just become
@@ -873,7 +933,7 @@ async function endTrip() {
   // produce a tiny/negative value where there's nothing to report.
   const timeSavedBySpeedingSeconds =
     finishedTrip.limitTrackedSeconds > 0
-      ? Math.max(0, finishedTrip.limitTrackedSeconds - finishedTrip.idealSecondsAtLimit)
+      ? Math.max(0, finishedTrip.idealSecondsAtLimit - finishedTrip.limitTrackedSeconds)
       : null;
   const pctTimeUnderLimit =
     finishedTrip.limitTrackedSeconds > 0
@@ -1079,6 +1139,7 @@ function stopSimulatedDrive() {
   lastPosition = null;
   devSpeedLimitOverrideMph = null;
   knownSpeedLimitMph = null;
+  setSpeedLimitSignDisplay(null);
   simulateProfileEl.disabled = false;
   simulateSpeedLimitEl.disabled = false;
   simulateBtn.textContent = "Start Simulated Drive";
@@ -1141,11 +1202,28 @@ zoneThresholdOptionEls.forEach((btn) => {
   btn.addEventListener("click", () => applyZoneThresholdPreset(btn.dataset.zoneThreshold));
 });
 
+function setSoundButtonStates(value) {
+  soundOptionEls.forEach((btn) => {
+    btn.setAttribute("aria-pressed", String(btn.dataset.sound === value));
+  });
+}
+
+setSoundButtonStates(savedSound);
+soundOptionEls.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const value = btn.dataset.sound;
+    soundMuted = value === "muted";
+    localStorage.setItem(SOUND_STORAGE_KEY, value);
+    setSoundButtonStates(value);
+  });
+});
+
 export function startApp() {
   setStatus("searching for GPS…");
   setSpeedDisplay(0);
   setPaceDisplay(0);
   setZoneDisplay(null);
+  setSpeedLimitSignDisplay(null);
   startWatching();
 }
 
@@ -1156,6 +1234,7 @@ export function stopApp() {
     simulationInterval = null;
     devSpeedLimitOverrideMph = null;
     knownSpeedLimitMph = null;
+    setSpeedLimitSignDisplay(null);
     simulateProfileEl.disabled = false;
     simulateSpeedLimitEl.disabled = false;
     simulateBtn.textContent = "Start Simulated Drive";

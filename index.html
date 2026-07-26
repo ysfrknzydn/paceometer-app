@@ -76,6 +76,17 @@
         <circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.6"/>
       </svg>
     </button>
+    <!-- Always-on posted speed limit sign (2026-07-26), Google-Maps-style --
+         a real feature under consideration for shipping, not a dev tool, so
+         it isn't gated behind the "Dev tools" disclosure like the simulated-
+         drive controls. Colors are the real-world sign's (white/red/black),
+         not themed to light/dark, matching how an actual road sign doesn't
+         change color at night -- see setSpeedLimitSignDisplay in app.js for
+         how it's kept in sync with the same knownSpeedLimitMph the zone
+         logic already tracks. Hidden whenever no limit is currently known. -->
+    <div id="speed-limit-sign" class="speed-limit-sign hidden" aria-live="polite">
+      <span id="speed-limit-sign-value" class="speed-limit-sign-value">--</span>
+    </div>
     <div id="status" class="status">searching for GPS…</div>
     <div id="readout" class="readout">
       <div id="speed" class="speed">--</div>
@@ -203,6 +214,23 @@
           <button type="button" class="segmented-option" data-zone-threshold="standard">Standard</button>
           <button type="button" class="segmented-option" data-zone-threshold="strict">Strict</button>
           <button type="button" class="segmented-option" data-zone-threshold="strictest">Strictest</button>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <h2>
+          <span class="settings-icon-chip settings-icon-chip--accent">
+            <svg class="settings-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path d="M4 9v6h4l5 4V5L8 9H4Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+              <path d="M16.5 9a4 4 0 0 1 0 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+            </svg>
+          </span>
+          Sound
+        </h2>
+        <p>Chimes for zone changes and starting/ending a trip. Mute if they'll clash with music or a call — the haptic buzz (on supported phones) still works either way.</p>
+        <div id="sound-switch" class="segmented-control" role="group" aria-label="Sound">
+          <button type="button" class="segmented-option" data-sound="on">Sound On</button>
+          <button type="button" class="segmented-option" data-sound="muted">Muted</button>
         </div>
       </section>
 
