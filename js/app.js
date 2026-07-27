@@ -617,18 +617,47 @@ const MAX_PLAUSIBLE_MPH = 200;
 // Throttled two ways (distance AND time) so an ordinary drive doesn't hammer
 // a free public API: a requery only fires once the driver has moved
 // meaningfully far *and* enough time has passed since the last one.
-const SPEED_LIMIT_API_URL = "https://overpass-api.de/api/interpreter";
+//
+// 2026-07-27 revision: real-world driving surfaced a lot of "no limit found"
+// spots -- OSM's maxspeed tagging coverage is genuinely incomplete, and no
+// amount of client-side cleverness adds tags that don't exist. Two additions
+// that help around the edges of that, without ever inventing a number OSM
+// doesn't have: (1) SPEED_LIMIT_API_URLS/queryOverpass try a couple of public
+// mirrors and a wider retry radius before giving up on a given fix, since
+// some "no result" cases are a slow/rate-limited mirror or a tagged way just
+// past the tight radius rather than a true tagging gap; (2) speedLimitCache
+// remembers each *confirmed* (real OSM tag) reading for a few minutes so a
+// brief gap between successful lookups -- or driving back over an
+// already-queried stretch -- doesn't blank the sign even though nothing
+// about the road changed. Both are still bounded by, and never exceed, what
+// Overpass actually reported at some point.
+const SPEED_LIMIT_API_URLS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.openstreetmap.fr/api/interpreter",
+];
 const SPEED_LIMIT_QUERY_RADIUS_METERS = 30;
+const SPEED_LIMIT_QUERY_RADIUS_WIDE_METERS = 100;
 const SPEED_LIMIT_QUERY_MIN_DISTANCE_METERS = 150;
 const SPEED_LIMIT_QUERY_MIN_INTERVAL_MS = 15000;
 const SPEED_LIMIT_FETCH_TIMEOUT_MS = 8000;
 // Mirrors ZONE_HYSTERESIS_SECONDS's purpose but in mph, since the limit
 // boundary is itself defined in mph -- see nextZoneState.
 const SPEED_LIMIT_HYSTERESIS_MPH = 2;
+// How long, and how far from where it was read, a confirmed limit is still
+// trusted to fill in for a lookup that came back empty. Long/wide enough to
+// bridge a temporary gap or a u-turn over the same stretch; short/tight
+// enough that it can't survive into a genuinely different road.
+const SPEED_LIMIT_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
+const SPEED_LIMIT_CACHE_RADIUS_METERS = 120;
+const SPEED_LIMIT_CACHE_MAX_ENTRIES = 50;
 
 let knownSpeedLimitMph = null;
 let lastSpeedLimitQuery = null; // { coords, timestamp } of the last lookup fired
 let speedLimitQueryInFlight = false;
+// Confirmed (real OSM tag) readings from this session only -- in-memory,
+// never persisted -- see the 2026-07-27 note above.
+let speedLimitCache = [];
 // Dev-tool-only override (see simulated-drive block below) -- when set,
 // skips the real network lookup entirely so the "limit" state can be
 // exercised without a real drive.
@@ -649,31 +678,67 @@ function parseMaxspeedTag(raw) {
   return null;
 }
 
-async function fetchSpeedLimitMph(coords) {
-  const query = `[out:json][timeout:10];way(around:${SPEED_LIMIT_QUERY_RADIUS_METERS},${coords.latitude},${coords.longitude})[highway][maxspeed];out tags;`;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), SPEED_LIMIT_FETCH_TIMEOUT_MS);
-  try {
-    const response = await fetch(SPEED_LIMIT_API_URL, {
-      method: "POST",
-      body: query,
-      signal: controller.signal,
-    });
-    if (!response.ok) return null;
-    const data = await response.json();
-    for (const element of data.elements || []) {
-      const mph = parseMaxspeedTag(element.tags && element.tags.maxspeed);
-      if (mph !== null) return mph;
+// Tries each mirror in turn and returns the first successfully parsed
+// response -- a non-ok response or a network/timeout error just moves on to
+// the next mirror rather than failing the whole lookup.
+async function queryOverpass(query) {
+  for (const url of SPEED_LIMIT_API_URLS) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), SPEED_LIMIT_FETCH_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        body: query,
+        signal: controller.signal,
+      });
+      if (!response.ok) continue;
+      return await response.json();
+    } catch {
+      // Network error, timeout, or malformed response on this mirror --
+      // fall through and try the next one.
+    } finally {
+      clearTimeout(timeoutId);
     }
-    return null;
-  } catch {
-    // Network error, timeout, or malformed response -- a real failure means
-    // we genuinely don't know anymore, so the caller treats this the same
-    // as "no limit found" rather than reusing a possibly stale value.
-    return null;
-  } finally {
-    clearTimeout(timeoutId);
   }
+  return null;
+}
+
+function extractMaxspeedMph(data) {
+  for (const element of (data && data.elements) || []) {
+    const mph = parseMaxspeedTag(element.tags && element.tags.maxspeed);
+    if (mph !== null) return mph;
+  }
+  return null;
+}
+
+async function fetchSpeedLimitMph(coords) {
+  const narrowQuery = `[out:json][timeout:10];way(around:${SPEED_LIMIT_QUERY_RADIUS_METERS},${coords.latitude},${coords.longitude})[highway][maxspeed];out tags;`;
+  const narrowMph = extractMaxspeedMph(await queryOverpass(narrowQuery));
+  if (narrowMph !== null) return narrowMph;
+
+  // Nothing usable at the tight radius across every mirror -- one wider
+  // retry before treating this fix as a genuine gap, since a fair number of
+  // "no result" cases are just the nearest tagged way sitting a bit past
+  // SPEED_LIMIT_QUERY_RADIUS_METERS.
+  const wideQuery = `[out:json][timeout:10];way(around:${SPEED_LIMIT_QUERY_RADIUS_WIDE_METERS},${coords.latitude},${coords.longitude})[highway][maxspeed];out tags;`;
+  return extractMaxspeedMph(await queryOverpass(wideQuery));
+}
+
+function rememberSpeedLimit(coords, mph, timestamp) {
+  speedLimitCache.push({ coords, mph, timestamp });
+  if (speedLimitCache.length > SPEED_LIMIT_CACHE_MAX_ENTRIES) speedLimitCache.shift();
+}
+
+// Most recent still-fresh, still-nearby confirmed reading, or null if
+// nothing in the cache qualifies. Walked newest-first so a stretch that's
+// been requeried since first being cached returns its latest value.
+function cachedSpeedLimitNear(coords, timestamp) {
+  for (let i = speedLimitCache.length - 1; i >= 0; i--) {
+    const entry = speedLimitCache[i];
+    if (timestamp - entry.timestamp > SPEED_LIMIT_CACHE_MAX_AGE_MS) continue;
+    if (haversineMeters(entry.coords, coords) <= SPEED_LIMIT_CACHE_RADIUS_METERS) return entry.mph;
+  }
+  return null;
 }
 
 async function maybeQuerySpeedLimit(coords, timestamp) {
@@ -695,7 +760,16 @@ async function maybeQuerySpeedLimit(coords, timestamp) {
   // second fix's call slip through and fire a duplicate request.
   lastSpeedLimitQuery = { coords, timestamp };
   speedLimitQueryInFlight = true;
-  knownSpeedLimitMph = await fetchSpeedLimitMph(coords);
+  const freshMph = await fetchSpeedLimitMph(coords);
+  if (freshMph !== null) {
+    knownSpeedLimitMph = freshMph;
+    rememberSpeedLimit(coords, freshMph, timestamp);
+  } else {
+    // A real lookup came back empty (or every mirror failed) -- fall back to
+    // the last confirmed reading for this same stretch of road, if any,
+    // rather than blanking a sign that was accurate a minute ago.
+    knownSpeedLimitMph = cachedSpeedLimitNear(coords, timestamp);
+  }
   speedLimitQueryInFlight = false;
 }
 
@@ -792,6 +866,42 @@ function stopWatching() {
   }
   lastPosition = null;
 }
+
+// --- Screen wake lock (2026-07-27) ---------------------------------------
+// Without this, the phone's own screen timeout kicks in mid-drive and the
+// driver has to keep tapping the screen awake -- exactly what a dashboard
+// meant to be glanced at while driving shouldn't require. Tied to
+// startApp()/stopApp() (the tracking session), not to which screen is
+// visible, so it's held for the whole session including the settings
+// screen. The OS releases the lock automatically whenever the tab/PWA is
+// backgrounded (app switch, real screen lock, etc.) -- the visibilitychange
+// listener below re-requests it on return so a brief backgrounding doesn't
+// permanently lose the lock for the rest of the drive.
+let wakeLock = null;
+
+async function requestWakeLock() {
+  if (!("wakeLock" in navigator)) return;
+  try {
+    wakeLock = await navigator.wakeLock.request("screen");
+  } catch {
+    // Request can legitimately fail (e.g. low battery on some platforms) --
+    // the app still works, it just falls back to the OS's normal timeout.
+    wakeLock = null;
+  }
+}
+
+function releaseWakeLock() {
+  if (wakeLock) {
+    wakeLock.release();
+    wakeLock = null;
+  }
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && watchId !== null && wakeLock === null) {
+    requestWakeLock();
+  }
+});
 
 function startTrip() {
   playTripStartTone();
@@ -1225,10 +1335,12 @@ export function startApp() {
   setZoneDisplay(null);
   setSpeedLimitSignDisplay(null);
   startWatching();
+  requestWakeLock();
 }
 
 export function stopApp() {
   stopWatching();
+  releaseWakeLock();
   if (simulationInterval !== null) {
     clearInterval(simulationInterval);
     simulationInterval = null;
