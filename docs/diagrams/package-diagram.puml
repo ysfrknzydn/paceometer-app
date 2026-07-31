@@ -1,0 +1,92 @@
+@startuml
+skinparam shadowing false
+skinparam roundCorner 6
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+skinparam nodesep 25
+skinparam ranksep 40
+
+skinparam package {
+  BorderColor #445566
+  FontStyle bold
+  FontColor #2A3540
+  BackgroundColor #FBFBFD
+}
+skinparam component {
+  BorderColor #5B6470
+  BackgroundColor #F0F2F6
+  FontColor #2A3540
+}
+skinparam arrow {
+  Color #7A8492
+  Thickness 1.2
+}
+
+package "entry point" as entry {
+  [auth.js] as auth
+  [supabaseClient.js] as supa
+}
+
+package "composition root" as root {
+  [app.js] as appjs
+}
+
+package "js/gps" as gpsPkg {
+  [GeolocationTracker] as geoTracker
+}
+
+package "js/speedLimit" as slPkg {
+  [SpeedLimitService] as sls
+}
+
+package "js/trip" as tripPkg {
+  [Trip] as tripClass
+  [tripsApi.js] as tripsApi
+}
+
+package "js/ui" as uiPkg {
+  [DashboardView] as dashboardView
+  [SegmentedSetting] as segmentedSetting
+}
+
+package "js/feedback" as fbPkg {
+  [AudioFeedback] as audioFeedback
+}
+
+package "js/dev  (deleted before shipping)" as devPkg #FDEDED {
+  [SimulatedDrive] as simulatedDrive
+}
+
+package "js/math  (pure functions, no classes)" as mathPkg #EAF3EA {
+  [paceMath.js] as paceMath
+  [zoneState.js] as zoneState
+  [geoMath.js] as geoMath
+  [speedLimitParsing.js] as slParsing
+}
+
+auth --> appjs
+auth --> supa
+tripsApi --> supa
+
+appjs --> geoTracker
+appjs --> sls
+appjs --> tripClass
+appjs --> tripsApi
+appjs --> dashboardView
+appjs --> segmentedSetting
+appjs --> audioFeedback
+appjs --> simulatedDrive
+appjs ..> paceMath
+appjs ..> zoneState
+
+geoTracker ..> geoMath
+geoTracker ..> paceMath
+sls ..> geoMath
+sls ..> slParsing
+slParsing ..> geoMath
+tripClass ..> paceMath
+dashboardView ..> zoneState
+dashboardView ..> paceMath
+simulatedDrive ..> paceMath
+
+@enduml

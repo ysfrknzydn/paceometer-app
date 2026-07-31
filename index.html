@@ -81,7 +81,8 @@
          it isn't gated behind the "Dev tools" disclosure like the simulated-
          drive controls. Colors are the real-world sign's (white/red/black),
          not themed to light/dark, matching how an actual road sign doesn't
-         change color at night -- see setSpeedLimitSignDisplay in app.js for
+         change color at night -- see DashboardView.setSpeedLimitSign in
+         js/ui/dashboardView.js for
          how it's kept in sync with the same knownSpeedLimitMph the zone
          logic already tracks. Hidden whenever no limit is currently known. -->
     <div id="speed-limit-sign" class="speed-limit-sign hidden" aria-live="polite">
@@ -98,7 +99,8 @@
         <div id="zone-value" class="zone-value">--</div>
       </div>
       <!-- Screen-reader-only announcer, updated only when the zone state
-           actually changes (js/app.js, setZoneDisplay) -- separate from the
+           actually changes (js/app.js's classifyZone, which calls
+           DashboardView.flashZoneChange) -- separate from the
            visible zone-indicator above because that updates every GPS
            sample (several times a second), which would make an aria-live
            region there unusably noisy. -->
@@ -110,11 +112,12 @@
       <div id="trip-zone-progress" class="trip-zone-progress"></div>
       <div id="trip-zone-progress-time" class="trip-zone-progress-time"></div>
       <!-- Dev tool for testing indoors without driving. Remove this whole
-           block (toggle + dropdown + button + progress bar) along with its
-           app.js code (search "DEV TOOL") before shipping to real study
-           participants -- see CLAUDE.md pre-launch checklist. Collapsed
-           behind a disclosure toggle by default (2026-07-16) so it doesn't
-           visually compete with the live readout during a normal demo. -->
+           block (toggle + dropdown + button + progress bar) along with
+           js/dev/simulatedDrive.js and its one import line in js/app.js
+           before shipping to real study participants -- see CLAUDE.md
+           pre-launch checklist. Collapsed behind a disclosure toggle by
+           default (2026-07-16) so it doesn't visually compete with the live
+           readout during a normal demo. -->
       <button id="simulate-toggle" class="simulate-toggle link-btn" type="button">Dev tools &#9656;</button>
       <div id="simulate-controls" class="simulate-controls hidden">
         <select id="simulate-profile" class="simulate-profile">
@@ -132,9 +135,11 @@
       </div>
     </div>
     <!-- Accessory Feature: end-of-trip summary, inline-swapped in place of
-         #readout/#trip-controls when a trip ends (see showTripSummary in
-         app.js). Deliberately just the one zone-percentage number -- no
-         historical trends, no vs-speed comparison. -->
+         #readout/#trip-controls when a trip ends (see
+         DashboardView.showTripSummary in js/ui/dashboardView.js, called
+         from endTrip in js/app.js). Deliberately just the one
+         zone-percentage number -- no historical trends, no vs-speed
+         comparison. -->
     <div id="trip-summary" class="trip-summary hidden">
       <div class="trip-summary-heading">Trip complete</div>
       <div id="trip-summary-value" class="trip-summary-value">--</div>

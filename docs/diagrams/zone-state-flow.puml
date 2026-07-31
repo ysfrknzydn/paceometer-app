@@ -1,0 +1,61 @@
+@startuml
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+skinparam roundCorner 8
+skinparam activity {
+  BackgroundColor #F7F8FC
+  BorderColor #445566
+  FontColor #2A3540
+  DiamondBackgroundColor #FDF3D8
+  DiamondBorderColor #B8952E
+  DiamondFontColor #2A3540
+  ArrowColor #5B6470
+  StartColor #445566
+  EndColor #445566
+}
+
+title nextZoneState(rounded, previous, mph, limit, thresholds)
+
+start
+
+if (previous is "limit" and limit\nnow unknown?) then (yes)
+  :previous := null;
+else (no)
+endif
+
+if (limit known?) then (yes)
+  switch (previous?)
+  case ( "limit" )
+    if (mph >= limit - hysteresis?) then (yes)
+      :**return "limit"**;<<#E8F3E8>>
+      stop
+    else (no)
+      :previous := null;
+    endif
+  case ( null, first reading )
+    if (mph >= limit?) then (yes)
+      :**return "limit"**;<<#E8F3E8>>
+      stop
+    else (no)
+    endif
+  case ( red / yellow / green )
+    if (mph >= limit + hysteresis?) then (yes)
+      :**return "limit"**;<<#E8F3E8>>
+      stop
+    else (no)
+    endif
+  endswitch
+else (no)
+endif
+
+if (previous == null?) then (yes)
+  :classify directly:\nrounded vs thresholds;
+else (no)
+  :apply hysteresis cascade\nfrom previous state;
+endif
+
+:**return red / yellow / green**;<<#E8F3E8>>
+stop
+
+@enduml

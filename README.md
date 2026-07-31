@@ -65,17 +65,35 @@ Either way, sign in once with email/password — Supabase keeps you signed in be
 - Hosting: GitHub Pages (static).
 - Backend: [Supabase](https://supabase.com) (Postgres + Auth), accessed client-side via `@supabase/supabase-js`.
 - Live location: browser Geolocation API (requires HTTPS or `localhost` — won't work over a plain local IP).
+- Testing (dev-only, doesn't touch the shipped app): `js/math/*.test.js` via Node's built-in test runner, and an independent Python port under `python/` via pytest, both checked against the same `tests/golden_vectors/`. See `docs/CLAUDE.md`.
 
 ## File structure
 
+The app was a single 1300+ line `js/app.js` through 2026-07-27; as of
+2026-07-31 it's split into modules with one owner each, still plain ES
+modules with no bundler (native browser `import`, works unmodified on
+GitHub Pages). See `docs/CLAUDE.md`'s Architecture section for the module
+graph and the reasoning behind the split.
+
 ```
-index.html              page shell: auth screen, live dashboard (+ inline trip summary), settings screen
-css/style.css            styling
-js/supabaseClient.js     Supabase client setup (URL + anon key)
-js/auth.js               sign-in/sign-up, gates the app behind a session
-js/app.js                GPS watch, speed display, trip start/stop + save
-manifest.json             PWA "Add to Home Screen" config
-supabase/migrations/     versioned database schema + Row Level Security policies
+index.html                      page shell: auth screen, live dashboard (+ inline trip summary), settings screen
+css/style.css                   styling
+js/supabaseClient.js            Supabase client setup (URL + anon key)
+js/auth.js                      sign-in/sign-up, gates the app behind a session
+js/app.js                       composition root: wires everything below together, exports startApp/stopApp
+js/math/                        pure pace/zone/geo/parsing formulas -- no DOM, no browser APIs
+js/gps/geolocationTracker.js    watchPosition + Screen Wake Lock
+js/speedLimit/speedLimitService.js   Overpass speed-limit lookup, caching, throttling
+js/trip/                        trip-recording lifecycle + the Supabase save
+js/ui/                          dashboard DOM rendering + the settings segmented controls
+js/feedback/audioFeedback.js    zone-change chime/haptic, trip start/end tones
+js/dev/simulatedDrive.js        indoor-testing dev tool (see Pre-launch checklist below)
+manifest.json                    PWA "Add to Home Screen" config
+supabase/migrations/            versioned database schema + Row Level Security policies
+python/paceometer_math/         dev-only Python port of js/math/ -- a pytest-tested second
+                                 implementation checked against the same golden vectors as
+                                 js/math/*.test.js (tests/golden_vectors/); never runs in the
+                                 shipped app
 ```
 
 ## Database setup

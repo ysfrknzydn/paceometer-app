@@ -1,0 +1,120 @@
+@startuml
+skinparam shadowing false
+skinparam roundCorner 4
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+skinparam classAttributeIconSize 0
+skinparam nodesep 30
+skinparam ranksep 50
+
+skinparam class {
+  BorderColor #445566
+  BackgroundColor #F7F8FC
+  ArrowColor #5B6470
+  FontColor #2A3540
+  AttributeFontColor #4A5460
+  StereotypeFontColor #8A6D1E
+}
+
+class App <<composition root — js/app.js, not a real class>> #FDF3D8 {
+  - zoneState
+  - thresholdSeconds
+  - nearingThresholdSeconds
+  --
+  + startApp()
+  + stopApp()
+  + setViewportZoomEnabled(enabled)
+  - handlePosition(position)
+  - classifyZone(marginalSeconds, mph, knownLimitMph)
+  - startTrip()
+  - endTrip()
+}
+
+class GeolocationTracker {
+  - watchId
+  - lastPosition
+  - wakeLock
+  --
+  + startWatching()
+  + stopWatching()
+  + requestWakeLock()
+  + releaseWakeLock()
+  + resetLastPosition()
+  + deriveSpeedMph(coords, timestamp): mph
+}
+
+class SpeedLimitService {
+  - knownLimitMph
+  - lastQuery
+  - queryInFlight
+  - cache
+  - devOverrideMph
+  --
+  + getKnownLimitMph(): mph
+  + setDevOverride(mph)
+  + clearDevOverride()
+  + resetKnownLimit()
+  + maybeQuery(coords, timestamp)
+}
+
+class Trip {
+  - recording
+  - trip
+  --
+  + isRecording: bool
+  + start()
+  + recordSample(mph, timestamp, zoneState, limit): progress
+  + finish(): summary
+  + cancel()
+}
+
+class DashboardView {
+  --
+  + setStatus(text, className)
+  + setSpeed(mph)
+  + setPace(mph)
+  + renderZone(state, rounded, limit)
+  + flashZoneChange(state)
+  + setSpeedLimitSign(limit)
+  + setTripZoneProgress(pct, saved)
+  + showTripSummary(saved, miles, elapsed)
+  + hideTripSummary()
+  + setViewportZoomEnabled(enabled)
+}
+
+class SegmentedSetting {
+  - options
+  --
+  + SegmentedSetting(config)
+}
+
+class AudioFeedback {
+  - audioCtx
+  - muted
+  --
+  + setMuted(muted)
+  + onZoneChange(state)
+  + playTripStartTone()
+  + playTripEndTone()
+}
+
+class SimulatedDrive {
+  - interval
+  --
+  + start()
+  + stop(restartWatch)
+}
+
+App "1" *-down- "1" GeolocationTracker : owns
+App "1" *-down- "1" SpeedLimitService : owns
+App "1" *-down- "1" Trip : owns
+App "1" *-down- "1" DashboardView : owns
+App "1" *-down- "3" SegmentedSetting : owns
+App "1" *-down- "1" AudioFeedback : owns
+App "1" *-down- "1" SimulatedDrive : owns
+
+SimulatedDrive ..> GeolocationTracker : «use» start/stopWatching,\nresetLastPosition
+SimulatedDrive ..> SpeedLimitService : «use» setDevOverride,\nclearDevOverride
+SimulatedDrive ..> DashboardView : «use» setSpeedLimitSign
+
+@enduml

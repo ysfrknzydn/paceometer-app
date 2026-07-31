@@ -1,0 +1,668 @@
+{
+  "paceSecondsFor": [
+    {
+      "input": {
+        "mph": 4
+      },
+      "output": null
+    },
+    {
+      "input": {
+        "mph": 4.9
+      },
+      "output": null
+    },
+    {
+      "input": {
+        "mph": 5
+      },
+      "output": 7200
+    },
+    {
+      "input": {
+        "mph": 10
+      },
+      "output": 3600
+    },
+    {
+      "input": {
+        "mph": 20
+      },
+      "output": 1800
+    },
+    {
+      "input": {
+        "mph": 30
+      },
+      "output": 1200
+    },
+    {
+      "input": {
+        "mph": 60
+      },
+      "output": 600
+    },
+    {
+      "input": {
+        "mph": 73
+      },
+      "output": 493.1506849315068
+    },
+    {
+      "input": {
+        "mph": 100
+      },
+      "output": 360
+    }
+  ],
+  "marginalSecondsSaved": [
+    {
+      "input": {
+        "mph": 4
+      },
+      "output": null
+    },
+    {
+      "input": {
+        "mph": 5
+      },
+      "output": 4800
+    },
+    {
+      "input": {
+        "mph": 20
+      },
+      "output": 600
+    },
+    {
+      "input": {
+        "mph": 30
+      },
+      "output": 300
+    },
+    {
+      "input": {
+        "mph": 40
+      },
+      "output": 180
+    },
+    {
+      "input": {
+        "mph": 58.4
+      },
+      "output": 90.12256669069939
+    },
+    {
+      "input": {
+        "mph": 70
+      },
+      "output": 64.28571428571422
+    },
+    {
+      "input": {
+        "mph": 100
+      },
+      "output": 32.72727272727269
+    }
+  ],
+  "zoneCeilingMph": [
+    {
+      "input": {
+        "thresholdSeconds": 60
+      },
+      "output": 72.62087348130012
+    },
+    {
+      "input": {
+        "thresholdSeconds": 90
+      },
+      "output": 58.4428877022476
+    },
+    {
+      "input": {
+        "thresholdSeconds": 150
+      },
+      "output": 44.24428900898052
+    },
+    {
+      "input": {
+        "thresholdSeconds": 240
+      },
+      "output": 34.05124837953327
+    }
+  ],
+  "formatDuration": [
+    {
+      "input": {
+        "totalSeconds": -5
+      },
+      "output": "0s"
+    },
+    {
+      "input": {
+        "totalSeconds": 0
+      },
+      "output": "0s"
+    },
+    {
+      "input": {
+        "totalSeconds": 1
+      },
+      "output": "1s"
+    },
+    {
+      "input": {
+        "totalSeconds": 45
+      },
+      "output": "45s"
+    },
+    {
+      "input": {
+        "totalSeconds": 59
+      },
+      "output": "59s"
+    },
+    {
+      "input": {
+        "totalSeconds": 60
+      },
+      "output": "1:00"
+    },
+    {
+      "input": {
+        "totalSeconds": 61
+      },
+      "output": "1:01"
+    },
+    {
+      "input": {
+        "totalSeconds": 90
+      },
+      "output": "1:30"
+    },
+    {
+      "input": {
+        "totalSeconds": 600
+      },
+      "output": "10:00"
+    },
+    {
+      "input": {
+        "totalSeconds": 3599
+      },
+      "output": "59:59"
+    }
+  ],
+  "nextZoneState": [
+    {
+      "input": {
+        "rounded": 50,
+        "previous": null,
+        "mph": 30,
+        "knownSpeedLimitMph": null,
+        "thresholdSeconds": 90,
+        "nearingThresholdSeconds": 180
+      },
+      "output": "red"
+    },
+    {
+      "input": {
+        "rounded": 100,
+        "previous": null,
+        "mph": 45,
+        "knownSpeedLimitMph": null,
+        "thresholdSeconds": 90,
+        "nearingThresholdSeconds": 180
+      },
+      "output": "yellow"
+    },
+    {
+      "input": {
+        "rounded": 200,
+        "previous": null,
+        "mph": 65,
+        "knownSpeedLimitMph": null,
+        "thresholdSeconds": 90,
+        "nearingThresholdSeconds": 180
+      },
+      "output": "green"
+    },
+    {
+      "input": {
+        "rounded": 170,
+        "previous": "green",
+        "mph": 42,
+        "knownSpeedLimitMph": null,
+        "thresholdSeconds": 90,
+        "nearingThresholdSeconds": 180
+      },
+      "output": "yellow"
+    },
+    {
+      "input": {
+        "rounded": 176,
+        "previous": "green",
+        "mph": 41,
+        "knownSpeedLimitMph": null,
+        "thresholdSeconds": 90,
+        "nearingThresholdSeconds": 180
+      },
+      "output": "green"
+    },
+    {
+      "input": {
+        "rounded": 80,
+        "previous": "yellow",
+        "mph": 58,
+        "knownSpeedLimitMph": null,
+        "thresholdSeconds": 90,
+        "nearingThresholdSeconds": 180
+      },
+      "output": "red"
+    },
+    {
+      "input": {
+        "rounded": 87,
+        "previous": "yellow",
+        "mph": 59,
+        "knownSpeedLimitMph": null,
+        "thresholdSeconds": 90,
+        "nearingThresholdSeconds": 180
+      },
+      "output": "yellow"
+    },
+    {
+      "input": {
+        "rounded": 96,
+        "previous": "red",
+        "mph": 57,
+        "knownSpeedLimitMph": null,
+        "thresholdSeconds": 90,
+        "nearingThresholdSeconds": 180
+      },
+      "output": "yellow"
+    },
+    {
+      "input": {
+        "rounded": 200,
+        "previous": "red",
+        "mph": 20,
+        "knownSpeedLimitMph": null,
+        "thresholdSeconds": 90,
+        "nearingThresholdSeconds": 180
+      },
+      "output": "green"
+    },
+    {
+      "input": {
+        "rounded": 300,
+        "previous": null,
+        "mph": 25,
+        "knownSpeedLimitMph": 25,
+        "thresholdSeconds": 90,
+        "nearingThresholdSeconds": 180
+      },
+      "output": "limit"
+    },
+    {
+      "input": {
+        "rounded": 300,
+        "previous": null,
+        "mph": 24,
+        "knownSpeedLimitMph": 25,
+        "thresholdSeconds": 90,
+        "nearingThresholdSeconds": 180
+      },
+      "output": "green"
+    },
+    {
+      "input": {
+        "rounded": 300,
+        "previous": "limit",
+        "mph": 23.5,
+        "knownSpeedLimitMph": 25,
+        "thresholdSeconds": 90,
+        "nearingThresholdSeconds": 180
+      },
+      "output": "limit"
+    },
+    {
+      "input": {
+        "rounded": 300,
+        "previous": "limit",
+        "mph": 22,
+        "knownSpeedLimitMph": 25,
+        "thresholdSeconds": 90,
+        "nearingThresholdSeconds": 180
+      },
+      "output": "green"
+    },
+    {
+      "input": {
+        "rounded": 50,
+        "previous": "limit",
+        "mph": 30,
+        "knownSpeedLimitMph": null,
+        "thresholdSeconds": 90,
+        "nearingThresholdSeconds": 180
+      },
+      "output": "red"
+    },
+    {
+      "input": {
+        "rounded": 140,
+        "previous": null,
+        "mph": 35,
+        "knownSpeedLimitMph": null,
+        "thresholdSeconds": 150,
+        "nearingThresholdSeconds": 300
+      },
+      "output": "red"
+    },
+    {
+      "input": {
+        "rounded": 230,
+        "previous": null,
+        "mph": 32,
+        "knownSpeedLimitMph": null,
+        "thresholdSeconds": 240,
+        "nearingThresholdSeconds": 480
+      },
+      "output": "red"
+    }
+  ],
+  "haversineMeters": [
+    {
+      "input": {
+        "a": {
+          "latitude": 0,
+          "longitude": 0
+        },
+        "b": {
+          "latitude": 0,
+          "longitude": 0
+        }
+      },
+      "output": 0
+    },
+    {
+      "input": {
+        "a": {
+          "latitude": 38.9,
+          "longitude": -77.05
+        },
+        "b": {
+          "latitude": 38.901,
+          "longitude": -77.05
+        }
+      },
+      "output": 111.1949266450897
+    },
+    {
+      "input": {
+        "a": {
+          "latitude": 38.9,
+          "longitude": -77.05
+        },
+        "b": {
+          "latitude": 38.9,
+          "longitude": -77.051
+        }
+      },
+      "output": 86.53668981196141
+    },
+    {
+      "input": {
+        "a": {
+          "latitude": 40.7128,
+          "longitude": -74.006
+        },
+        "b": {
+          "latitude": 34.0522,
+          "longitude": -118.2437
+        }
+      },
+      "output": 3935746.254609723
+    }
+  ],
+  "parseMaxspeedTag": [
+    {
+      "input": {
+        "raw": "50"
+      },
+      "output": 50
+    },
+    {
+      "input": {
+        "raw": "30 mph"
+      },
+      "output": 30
+    },
+    {
+      "input": {
+        "raw": "25mph"
+      },
+      "output": 25
+    },
+    {
+      "input": {
+        "raw": "50 km/h"
+      },
+      "output": 31.068550000000002
+    },
+    {
+      "input": {
+        "raw": "80km/h"
+      },
+      "output": 49.70968
+    },
+    {
+      "input": {
+        "raw": " 25 MPH "
+      },
+      "output": 25
+    },
+    {
+      "input": {
+        "raw": "national"
+      },
+      "output": null
+    },
+    {
+      "input": {
+        "raw": "none"
+      },
+      "output": null
+    },
+    {
+      "input": {
+        "raw": ""
+      },
+      "output": null
+    },
+    {
+      "input": {
+        "raw": null
+      },
+      "output": null
+    },
+    {
+      "input": {
+        "raw": 42
+      },
+      "output": null
+    }
+  ],
+  "extractMaxspeedMph": [
+    {
+      "input": {
+        "data": {
+          "elements": [
+            {
+              "tags": {
+                "maxspeed": "45 mph"
+              }
+            }
+          ]
+        }
+      },
+      "output": 45
+    },
+    {
+      "input": {
+        "data": {
+          "elements": [
+            {
+              "tags": {}
+            },
+            {
+              "tags": {
+                "maxspeed": "30"
+              }
+            }
+          ]
+        }
+      },
+      "output": 30
+    },
+    {
+      "input": {
+        "data": {
+          "elements": [
+            {
+              "tags": {
+                "maxspeed": "national"
+              }
+            }
+          ]
+        }
+      },
+      "output": null
+    },
+    {
+      "input": {
+        "data": {
+          "elements": []
+        }
+      },
+      "output": null
+    },
+    {
+      "input": {
+        "data": {}
+      },
+      "output": null
+    },
+    {
+      "input": {
+        "data": null
+      },
+      "output": null
+    }
+  ],
+  "cachedSpeedLimitNear": [
+    {
+      "input": {
+        "cache": [
+          {
+            "coords": {
+              "latitude": 38.9,
+              "longitude": -77.05
+            },
+            "mph": 25,
+            "timestamp": 1000
+          },
+          {
+            "coords": {
+              "latitude": 38.95,
+              "longitude": -77.1
+            },
+            "mph": 45,
+            "timestamp": 5000
+          }
+        ],
+        "coords": {
+          "latitude": 38.9,
+          "longitude": -77.05
+        },
+        "timestamp": 61000,
+        "maxAgeMs": 300000,
+        "radiusMeters": 120
+      },
+      "output": 25
+    },
+    {
+      "input": {
+        "cache": [
+          {
+            "coords": {
+              "latitude": 38.9,
+              "longitude": -77.05
+            },
+            "mph": 25,
+            "timestamp": 1000
+          },
+          {
+            "coords": {
+              "latitude": 38.95,
+              "longitude": -77.1
+            },
+            "mph": 45,
+            "timestamp": 5000
+          }
+        ],
+        "coords": {
+          "latitude": 38.9,
+          "longitude": -77.05
+        },
+        "timestamp": 401000,
+        "maxAgeMs": 300000,
+        "radiusMeters": 120
+      },
+      "output": null
+    },
+    {
+      "input": {
+        "cache": [
+          {
+            "coords": {
+              "latitude": 38.9,
+              "longitude": -77.05
+            },
+            "mph": 25,
+            "timestamp": 1000
+          },
+          {
+            "coords": {
+              "latitude": 38.95,
+              "longitude": -77.1
+            },
+            "mph": 45,
+            "timestamp": 5000
+          }
+        ],
+        "coords": {
+          "latitude": 10,
+          "longitude": 10
+        },
+        "timestamp": 61000,
+        "maxAgeMs": 300000,
+        "radiusMeters": 120
+      },
+      "output": null
+    },
+    {
+      "input": {
+        "cache": [],
+        "coords": {
+          "latitude": 38.9,
+          "longitude": -77.05
+        },
+        "timestamp": 1000,
+        "maxAgeMs": 300000,
+        "radiusMeters": 120
+      },
+      "output": null
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+@startuml
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+skinparam maxMessageSize 160
+
+skinparam sequence {
+  ArrowColor #445566
+  LifeLineBorderColor #8892A0
+  LifeLineBackgroundColor #F7F8FC
+  ParticipantBorderColor #445566
+  ParticipantBackgroundColor #EDEFF4
+  ParticipantFontStyle bold
+  ActorBorderColor #445566
+  BoxBorderColor #445566
+  BoxBackgroundColor #FBFBFD
+}
+skinparam noteBackgroundColor #FDF3D8
+skinparam noteBorderColor #C7A93F
+
+participant "Browser\nGeolocation" as GPS
+participant "GeolocationTracker" as GT
+participant "app.js\n(orchestrator)" as App
+participant "SpeedLimitService" as SLS
+participant "zoneState.js\n(nextZoneState)" as ZM
+participant "DashboardView" as DV
+participant "Trip" as TR
+participant "AudioFeedback" as AF
+
+GPS -> GT : watchPosition callback(position)
+activate GT
+GT -> App : onPosition(position)
+activate App
+
+App -> DV : setStatus("live")
+
+App -> SLS : maybeQuery(coords, timestamp)
+note right : fire-and-forget, not awaited
+App -> SLS : getKnownLimitMph()
+SLS --> App : knownLimitMph
+App -> DV : setSpeedLimitSign(knownLimitMph)
+
+App -> GT : deriveSpeedMph(coords, timestamp)
+GT --> App : mph (or null)
+
+alt mph is not null
+  App -> DV : setSpeed(mph)
+  App -> DV : setPace(mph)
+
+  App -> ZM : nextZoneState(rounded, previous,\nmph, limit, thresholds)
+  ZM --> App : zoneState
+  App -> DV : renderZone(zoneState, rounded, limit)
+
+  opt zoneState changed
+    App -> DV : flashZoneChange(zoneState)
+    App -> AF : onZoneChange(zoneState)
+  end
+
+  App -> TR : recordSample(mph, timestamp, zoneState, limit)
+  TR --> App : progress
+  App -> DV : setTripZoneProgress(progress)
+end
+
+deactivate App
+deactivate GT
+
+@enduml
