@@ -18,6 +18,7 @@ A real-time in-car pace/speed display, built as a Progressive Web App. Part of a
 - Built to WCAG AA contrast throughout (including a dedicated light-mode pass, verified with Lighthouse and axe-core), with screen-reader announcements for state changes and errors, real form labels, `prefers-reduced-motion` support, and touch targets sized for the platform minimum.
 - Keeps the screen awake for the whole tracking session, like a navigation app, so you don't have to keep tapping the phone to stop it sleeping mid-drive.
 - Location handling: your raw GPS coordinates are used on-device to calculate speed, and are also sent transiently to OpenStreetMap's free public speed-limit lookup (Overpass) so the app can tell what the posted limit is near you — that lookup is never stored by this app, never sent to our database, and never logged anywhere. Only derived speed/pace/distance/limit metrics ever reach Supabase.
+- A vehicle picker in Settings (2026-08-03): Make → Model → Year → Variant, backed by a weekly-refreshed EPA fuel-economy dataset, plus an editable local gas price. Once a vehicle is selected, the end-of-trip summary adds two more lines: roughly what the trip cost in gas, and roughly how much of that came from driving over the speed limit. See "How the fuel-cost math works" below for the model and its known limitations.
 
 ## How the pace/zone math works
 
@@ -38,6 +39,16 @@ This section exists so the exact logic — and which parts are backed by a citat
 - **2026-07-26, two fixes:** the math itself had the subtraction backwards, so it always showed a flat `0s` regardless of how much speeding actually saved — fixed. And both this number and the live version are now prefixed with "only" ("only 15s faster than…") — the un-prefixed wording read as a scoreboard inviting the number to grow, which cuts against the app's actual point of showing how *little* speeding buys you.
 
 `pct_time_in_zone` (the original time-math metric) and the new `pct_time_under_limit` (percent of the trip spent at/under the posted limit, where known) are both still computed and saved to the database for research analysis — they're just not the on-screen headline.
+
+## How the fuel-cost math works
+
+Added 2026-08-03. The only fuel-economy data available (fueleconomy.gov's bulk CSV, `python/fuel_pipeline/`) is two EPA test-cycle MPG figures per vehicle: city (test average 21.2mph) and highway (test average 48.3mph). That's not a real speed-swept curve, and there's no separate "trim" field either. A make/model/year can have several rows differing only by transmission, drivetrain, or engine, which is what the picker's fourth "Variant" level actually selects between.
+
+**Between the two anchors**, gallons/mile is modeled as a straight line: a reasonable interpolant given only two real points, though the lit review's Wang et al. (2008, peer-reviewed) finds the true minimum sits around 31-43mph, inside this range rather than at either endpoint.
+
+**Above the highway anchor** is where most real speeding-over-the-limit driving happens (65 in a 55, 80 in a 70). A straight line through just the two anchors would keep *improving* mileage as speed rises, which is backwards from reality, and would tell a driver they saved gas by speeding in exactly the most common case. Found and fixed the same day it was specced. Instead, gallons/mile grows quadratically above the highway anchor. The v² *shape* is ordinary aerodynamics (drag force ∝ v², power to overcome it ∝ v³, so fuel/mile from drag alone ∝ v²), but the specific *coefficient* is only calibrated from a widely-cited rule of thumb (about 10% more fuel at 110 vs. 100 km/h) that the lit review itself flags as needing primary-source verification before academic citation. Treat the magnitude as same-ballpark, not exact, pending a tighter fit against Greene (1981) or Wang et al. (2008). See `js/math/fuelMath.js`'s header comment for the full derivation.
+
+The end-of-trip gas-cost-saved number is clamped at 0 the same way the time-saved number is (see point 5 above), because the model isn't strictly monotonic in speed. City-to-highway driving genuinely improves mileage here, matching real EPA data, so a trip driven entirely at or under the limit could otherwise show a small negative "savings," which would read as encouraging speeding.
 
 ## Getting the app on your phone
 
@@ -65,7 +76,8 @@ Either way, sign in once with email/password — Supabase keeps you signed in be
 - Hosting: GitHub Pages (static).
 - Backend: [Supabase](https://supabase.com) (Postgres + Auth), accessed client-side via `@supabase/supabase-js`.
 - Live location: browser Geolocation API (requires HTTPS or `localhost` — won't work over a plain local IP).
-- Testing (dev-only, doesn't touch the shipped app): `js/math/*.test.js` via Node's built-in test runner, and an independent Python port under `python/` via pytest, both checked against the same `tests/golden_vectors/`. See `docs/CLAUDE.md`.
+- Testing (dev-only, doesn't touch the shipped app): `js/math/*.test.js` via Node's built-in test runner, and an independent Python port under `python/` via pytest, both checked against the same `tests/golden_vectors/`. Runs on every push/PR via `.github/workflows/tests.yml`. See `docs/CLAUDE.md`.
+- Fuel-economy data: `python/fuel_pipeline/` fetches/cleans fueleconomy.gov's bulk CSV and publishes it to a Supabase table via the `supabase` Python package, on a weekly cron (`.github/workflows/weekly-fuel-data-refresh.yml`) — not committed to the repo.
 
 ## File structure
 
@@ -81,11 +93,11 @@ css/style.css                   styling
 js/supabaseClient.js            Supabase client setup (URL + anon key)
 js/auth.js                      sign-in/sign-up, gates the app behind a session
 js/app.js                       composition root: wires everything below together, exports startApp/stopApp
-js/math/                        pure pace/zone/geo/parsing formulas -- no DOM, no browser APIs
+js/math/                        pure pace/zone/geo/parsing/fuel formulas -- no DOM, no browser APIs
 js/gps/geolocationTracker.js    watchPosition + Screen Wake Lock
 js/speedLimit/speedLimitService.js   Overpass speed-limit lookup, caching, throttling
 js/trip/                        trip-recording lifecycle + the Supabase save
-js/ui/                          dashboard DOM rendering + the settings segmented controls
+js/ui/                          dashboard DOM rendering, settings segmented controls, vehicle picker
 js/feedback/audioFeedback.js    zone-change chime/haptic, trip start/end tones
 js/dev/simulatedDrive.js        indoor-testing dev tool (see Pre-launch checklist below)
 manifest.json                    PWA "Add to Home Screen" config
@@ -94,11 +106,14 @@ python/paceometer_math/         dev-only Python port of js/math/ -- a pytest-tes
                                  implementation checked against the same golden vectors as
                                  js/math/*.test.js (tests/golden_vectors/); never runs in the
                                  shipped app
+python/fuel_pipeline/           dev/CI-only: fetch/clean/publish the weekly fuel-economy dataset
+                                 (never runs in the shipped app either)
+.github/workflows/              tests.yml (push/PR) and weekly-fuel-data-refresh.yml (cron)
 ```
 
 ## Database setup
 
-Schema changes are tracked as versioned migrations in `supabase/migrations/` and applied with the Supabase CLI (`supabase db push`) rather than pasted by hand into the SQL Editor — see `docs/CLAUDE.md` for the full workflow. The current schema creates a `trips` table with RLS policies that restrict each signed-in user to inserting and reading only their own rows — nobody but the developer (via the Supabase dashboard or a service-role key, which is never used client-side) can see the full table.
+Schema changes are tracked as versioned migrations in `supabase/migrations/` and applied with the Supabase CLI (`supabase db push`) rather than pasted by hand into the SQL Editor — see `docs/CLAUDE.md` for the full workflow. The current schema creates a `trips` table with RLS policies that restrict each signed-in user to inserting and reading only their own rows — nobody but the developer (via the Supabase dashboard or a service-role key, which is never used client-side) can see the full table. A second table, `vehicle_fuel_economy`, holds the shared (not per-user) fuel-economy reference data every signed-in driver can read but only the weekly refresh Action (via a service-role key) can write.
 
 The anon key in `js/supabaseClient.js` is safe to have committed to this public repo — it identifies the app, not a secret. Row Level Security is the actual access boundary, not the key.
 

@@ -19,6 +19,9 @@ export async function saveTrip(summary) {
     avg_pace_seconds: summary.avgPaceSeconds,
     pct_time_in_zone: summary.pctInZone,
     pct_time_under_limit: summary.pctTimeUnderLimit,
+    gallons_used: summary.gallonsUsed,
+    gallons_saved_by_speeding: summary.gallonsSavedBySpeeding,
+    vehicle_label: summary.vehicleLabel,
   });
 
   return error;

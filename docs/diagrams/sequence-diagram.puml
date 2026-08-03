@@ -24,6 +24,7 @@ participant "app.js\n(orchestrator)" as App
 participant "SpeedLimitService" as SLS
 participant "zoneState.js\n(nextZoneState)" as ZM
 participant "DashboardView" as DV
+participant "VehiclePicker" as VP
 participant "Trip" as TR
 participant "AudioFeedback" as AF
 
@@ -56,7 +57,9 @@ alt mph is not null
     App -> AF : onZoneChange(zoneState)
   end
 
-  App -> TR : recordSample(mph, timestamp, zoneState, limit)
+  App -> VP : getSelectedVehicle()
+  VP --> App : vehicle (or null)
+  App -> TR : recordSample(mph, timestamp, zoneState,\nlimit, vehicle)
   TR --> App : progress
   App -> DV : setTripZoneProgress(progress)
 end

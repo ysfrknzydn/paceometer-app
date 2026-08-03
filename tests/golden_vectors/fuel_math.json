@@ -1,0 +1,36 @@
+{
+  "gallonsPerMile": [
+    {
+      "input": { "mph": 21.2, "cityMpg": 30, "highwayMpg": 40 },
+      "output": 0.03333333333333333
+    },
+    {
+      "input": { "mph": 48.3, "cityMpg": 30, "highwayMpg": 40 },
+      "output": 0.025
+    },
+    {
+      "input": { "mph": 10, "cityMpg": 30, "highwayMpg": 40 },
+      "output": 0.03333333333333333
+    },
+    {
+      "input": { "mph": 0, "cityMpg": 30, "highwayMpg": 40 },
+      "output": 0.03333333333333333
+    },
+    {
+      "input": { "mph": 34.75, "cityMpg": 25, "highwayMpg": 35 },
+      "output": 0.03428571428571429
+    },
+    {
+      "input": { "mph": 65, "cityMpg": 28, "highwayMpg": 38 },
+      "output": 0.030149814772288893
+    },
+    {
+      "input": { "mph": 80, "cityMpg": 28, "highwayMpg": 38 },
+      "output": 0.04013046078608285
+    },
+    {
+      "input": { "mph": 200, "cityMpg": 15, "highwayMpg": 45 },
+      "output": 0.28937781867420875
+    }
+  ]
+}

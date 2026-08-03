@@ -1,0 +1,44 @@
+name: Weekly fuel data refresh
+
+# Fetches fueleconomy.gov's bulk vehicles.csv (updated on their end roughly
+# weekly, observed Tuesdays), cleans/filters it (python/fuel_pipeline/), and
+# upserts it into the vehicle_fuel_economy Supabase table the app's
+# Settings vehicle picker reads from -- see docs/CLAUDE.md's fuel-efficiency
+# Architecture section. Cron-only by design, separate from tests.yml, which
+# runs on every push/PR instead.
+#
+# Requires two repo secrets that are NOT set by this workflow file --
+# add them yourself under Settings -> Secrets and variables -> Actions:
+#   SUPABASE_URL               (same URL as js/supabaseClient.js)
+#   SUPABASE_SERVICE_ROLE_KEY  (Supabase dashboard -> Project Settings ->
+#                               API -> service_role key -- NOT the anon key;
+#                               this bypasses RLS, so treat it as a secret)
+on:
+  schedule:
+    - cron: "0 6 * * 3" # Wednesdays 06:00 UTC, a day after fueleconomy.gov's own Tuesday update
+  workflow_dispatch: {} # allows a manual run from the Actions tab, e.g. to verify setup
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install Python dependencies
+        run: pip install -r python/requirements.txt
+
+      - name: Run pipeline tests as a gate
+        working-directory: python
+        run: pytest tests/test_fuel_pipeline_clean.py
+
+      - name: Fetch, clean, and publish vehicle fuel-economy data
+        working-directory: python
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python -m fuel_pipeline

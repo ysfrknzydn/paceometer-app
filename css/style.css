@@ -534,6 +534,13 @@ html, body {
   color: var(--extra-tint-dim);
 }
 
+.trip-summary-gas-cost,
+.trip-summary-gas-saved {
+  margin-top: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--extra-tint-dim);
+}
+
 .trip-summary-save-status {
   margin-top: 0.3rem;
   font-size: 0.85rem;
@@ -798,6 +805,67 @@ html, body {
   margin-bottom: 1rem;
 }
 
+/* Vehicle picker (2026-08-03): four cascading selects, same visual
+   language as .auth-form input since both are the app's only other
+   free-form (non-segmented-control) inputs. */
+.vehicle-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+}
+
+.vehicle-select,
+.gas-price-input {
+  font-size: 0.95rem;
+  font-family: var(--font-body);
+  padding: 0.7rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid var(--border-eff);
+  background: var(--surface);
+  color: var(--text-primary);
+  min-height: 44px;
+}
+
+.vehicle-select:disabled {
+  opacity: 0.5;
+}
+
+.vehicle-select:focus,
+.gas-price-input:focus {
+  outline: none;
+  border-color: var(--accent-2);
+}
+
+.vehicle-selected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: 12px;
+  background: var(--accent-2-dim);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.vehicle-selected .link-btn {
+  margin-top: 0;
+}
+
+.gas-price-label {
+  display: block;
+  margin-top: 0.9rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.gas-price-input {
+  width: 100%;
+}
+
 /* Phone turned on its side (mounted horizontally on the dash): the viewport
    is short and wide, so stack the readout and trip controls side by side
    instead of vertically. Sizes here are set explicitly off dvh (the
@@ -998,7 +1066,9 @@ html, body {
 :root[data-theme="light"] body {
   background: #f2f2f5;
 }
-:root[data-theme="light"] .auth-form input {
+:root[data-theme="light"] .auth-form input,
+:root[data-theme="light"] .vehicle-select,
+:root[data-theme="light"] .gas-price-input {
   background: #fff;
   border-color: var(--surface-border);
 }

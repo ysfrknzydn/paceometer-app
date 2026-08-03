@@ -41,6 +41,8 @@ export class DashboardView {
     this._tripSummaryValueEl = document.getElementById("trip-summary-value");
     this._tripSummaryCaptionEl = document.getElementById("trip-summary-caption");
     this._tripSummaryDetailEl = document.getElementById("trip-summary-detail");
+    this._tripSummaryGasCostEl = document.getElementById("trip-summary-gas-cost");
+    this._tripSummaryGasSavedEl = document.getElementById("trip-summary-gas-saved");
     this._tripSummarySaveStatusEl = document.getElementById("trip-summary-save-status");
     this._tripSummaryDismissBtn = document.getElementById("trip-summary-dismiss");
     this._appScreenEl = document.getElementById("app");
@@ -176,8 +178,13 @@ export class DashboardView {
   }
 
   // Accessory Feature: the end-of-trip summary. Deliberately just the one
-  // number -- no historical trends, nothing about the car.
-  showTripSummary(timeSavedBySpeedingSeconds, distanceMiles, elapsedSeconds) {
+  // headline number -- no historical trends, nothing about the car -- plus,
+  // as of 2026-08-03, two smaller gas-cost lines below it (only shown once
+  // a vehicle is selected in Settings) answering the same "was speeding
+  // worth it" question in dollars instead of seconds. gasCostUsd/
+  // gasCostSavedUsd are already-converted dollar amounts (app.js owns the
+  // gas-price setting) -- this stays a "dumb" renderer either way.
+  showTripSummary(timeSavedBySpeedingSeconds, distanceMiles, elapsedSeconds, gasCostUsd, gasCostSavedUsd) {
     this._readoutEl.classList.add("hidden");
     this._tripControlsEl.classList.add("hidden");
     this._tripSummaryEl.classList.remove("hidden");
@@ -197,6 +204,14 @@ export class DashboardView {
     const miles = distanceMiles.toFixed(1);
     const minutes = Math.round(elapsedSeconds / 60);
     this._tripSummaryDetailEl.textContent = `${miles}mi in ${minutes}min`;
+
+    // Draft copy, not yet wording-reviewed -- see docs/TODO.md. Omitted
+    // entirely (not "--") when no vehicle is selected, same null -> omit
+    // pattern the rest of this method already uses for gasCostUsd itself.
+    this._tripSummaryGasCostEl.textContent =
+      gasCostUsd === null ? "" : `~$${gasCostUsd.toFixed(2)} in gas this trip`;
+    this._tripSummaryGasSavedEl.textContent =
+      gasCostSavedUsd === null ? "" : `only ~$${gasCostSavedUsd.toFixed(2)} of that from driving over the limit`;
   }
 
   hideTripSummary() {

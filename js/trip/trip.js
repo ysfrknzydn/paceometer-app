@@ -4,6 +4,7 @@
 // (percentages, time-saved, distance, etc.) instead of the caller computing
 // them inline.
 import { paceSecondsFor } from "../math/paceMath.js";
+import { gallonsPerMile } from "../math/fuelMath.js";
 
 export class Trip {
   constructor() {
@@ -32,13 +33,23 @@ export class Trip {
       limitTrackedSeconds: 0,
       idealSecondsAtLimit: 0,
       underLimitSeconds: 0,
+      vehicleTrackedMiles: 0,
+      actualGallons: 0,
+      fuelLimitTrackedMiles: 0,
+      limitTrackedGallons: 0,
+      idealGallonsAtLimit: 0,
+      vehicleLabel: null,
     };
     this._recording = true;
   }
 
   // Returns { pctInZoneSoFar, timeSavedBySpeedingSoFar } (the running
   // live-readout numbers) while recording, or null while not recording.
-  recordSample(mph, timestamp, zoneState, knownSpeedLimitMph) {
+  // `vehicle` is { cityMpg, highwayMpg, label } from the Settings vehicle
+  // picker, or null if none is selected -- passed per-sample (like
+  // knownSpeedLimitMph) rather than fixed at start(), so a driver who picks
+  // a vehicle mid-trip still gets fuel numbers for the rest of it.
+  recordSample(mph, timestamp, zoneState, knownSpeedLimitMph, vehicle = null) {
     if (!this._recording || !this._trip) return null;
     const trip = this._trip;
 
@@ -72,6 +83,34 @@ export class Trip {
         trip.idealSecondsAtLimit += (mph / knownSpeedLimitMph) * seconds;
         if (mph <= knownSpeedLimitMph) {
           trip.underLimitSeconds += seconds;
+        }
+      }
+
+      // Fuel tracking (2026-08-03): only meaningful once a vehicle is
+      // selected in Settings -- same "exclude unknown from both sides"
+      // principle as the zone/speed-limit tracking above. actualGallons
+      // covers the whole vehicle-tracked trip (it's the "what did this
+      // trip cost" number); limitTrackedGallons/idealGallonsAtLimit are
+      // restricted to the samples where a speed limit was *also* known,
+      // mirroring limitTrackedSeconds/idealSecondsAtLimit exactly, so the
+      // "gas saved by speeding" comparison is apples-to-apples over the
+      // same stretch of trip.
+      const milesThisSample = mph * hours;
+      if (vehicle !== null) {
+        trip.vehicleTrackedMiles += milesThisSample;
+        trip.vehicleLabel = vehicle.label;
+        const actualRate = gallonsPerMile(mph, vehicle.cityMpg, vehicle.highwayMpg);
+        trip.actualGallons += actualRate * milesThisSample;
+
+        if (knownSpeedLimitMph !== null) {
+          trip.fuelLimitTrackedMiles += milesThisSample;
+          trip.limitTrackedGallons += actualRate * milesThisSample;
+          const idealRate = gallonsPerMile(
+            Math.min(mph, knownSpeedLimitMph),
+            vehicle.cityMpg,
+            vehicle.highwayMpg
+          );
+          trip.idealGallonsAtLimit += idealRate * milesThisSample;
         }
       }
     }
@@ -127,6 +166,22 @@ export class Trip {
         ? (finishedTrip.underLimitSeconds / finishedTrip.limitTrackedSeconds) * 100
         : null;
 
+    // What this trip cost in gas, and how much of that was extra cost from
+    // speeding -- only meaningful once a vehicle is selected. gallonsUsed
+    // covers the whole trip; gallonsSavedBySpeeding is restricted to the
+    // limit-known portion and clamped at 0 for the same reason
+    // timeSavedBySpeedingSeconds is: gallonsPerMile isn't monotonic in
+    // speed (city->highway driving genuinely gets *better* mileage in this
+    // model, matching real EPA data), so a trip driven entirely at/under
+    // the limit could otherwise report a small negative number here --
+    // never worth reporting as a negative "savings" either way, per the
+    // standing never-reads-as-encouraging-speeding rule.
+    const gallonsUsed = finishedTrip.vehicleTrackedMiles > 0 ? finishedTrip.actualGallons : null;
+    const gallonsSavedBySpeeding =
+      finishedTrip.fuelLimitTrackedMiles > 0
+        ? Math.max(0, finishedTrip.limitTrackedGallons - finishedTrip.idealGallonsAtLimit)
+        : null;
+
     const elapsedSeconds = (Date.now() - finishedTrip.startedAt.getTime()) / 1000;
     const avgSpeedMph =
       finishedTrip.sampleCount > 0 ? finishedTrip.speedSum / finishedTrip.sampleCount : null;
@@ -148,6 +203,9 @@ export class Trip {
       pctInZone,
       pctTimeUnderLimit,
       timeSavedBySpeedingSeconds,
+      gallonsUsed,
+      gallonsSavedBySpeeding,
+      vehicleLabel: finishedTrip.vehicleLabel,
       elapsedSeconds,
     };
   }

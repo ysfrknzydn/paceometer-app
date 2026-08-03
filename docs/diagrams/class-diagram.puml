@@ -63,7 +63,7 @@ class Trip {
   --
   + isRecording: bool
   + start()
-  + recordSample(mph, timestamp, zoneState, limit): progress
+  + recordSample(mph, timestamp, zoneState, limit, vehicle): progress
   + finish(): summary
   + cancel()
 }
@@ -77,7 +77,7 @@ class DashboardView {
   + flashZoneChange(state)
   + setSpeedLimitSign(limit)
   + setTripZoneProgress(pct, saved)
-  + showTripSummary(saved, miles, elapsed)
+  + showTripSummary(saved, miles, elapsed, gasCost, gasSaved)
   + hideTripSummary()
   + setViewportZoomEnabled(enabled)
 }
@@ -86,6 +86,13 @@ class SegmentedSetting {
   - options
   --
   + SegmentedSetting(config)
+}
+
+class VehiclePicker {
+  - selected
+  - variants
+  --
+  + getSelectedVehicle(): vehicle
 }
 
 class AudioFeedback {
@@ -110,6 +117,7 @@ App "1" *-down- "1" SpeedLimitService : owns
 App "1" *-down- "1" Trip : owns
 App "1" *-down- "1" DashboardView : owns
 App "1" *-down- "3" SegmentedSetting : owns
+App "1" *-down- "1" VehiclePicker : owns
 App "1" *-down- "1" AudioFeedback : owns
 App "1" *-down- "1" SimulatedDrive : owns
 

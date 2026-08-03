@@ -1,0 +1,39 @@
+name: Tests
+
+# Fast-feedback suite: the pure math mirrored in js/math/ and
+# python/paceometer_math/ (cross-checked against tests/golden_vectors/),
+# plus the fuel-data-pipeline's pure cleaning/filtering logic
+# (python/tests/test_fuel_pipeline_clean.py). Deliberately separate from
+# .github/workflows/weekly-fuel-data-refresh.yml, which only runs on a
+# schedule -- this one runs on every push/PR so a broken formula is caught
+# immediately, not up to a week later.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Run JS math tests
+        run: node --test js/math/*.test.js
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install Python dependencies
+        run: pip install -r python/requirements.txt
+
+      - name: Run Python tests
+        working-directory: python
+        run: pytest

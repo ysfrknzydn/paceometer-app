@@ -10,6 +10,7 @@ import { Trip } from "./trip/trip.js";
 import { saveTrip } from "./trip/tripsApi.js";
 import { DashboardView } from "./ui/dashboardView.js";
 import { SegmentedSetting } from "./ui/settingsControls.js";
+import { VehiclePicker } from "./ui/vehiclePicker.js";
 import { AudioFeedback } from "./feedback/audioFeedback.js";
 import { SimulatedDrive } from "./dev/simulatedDrive.js";
 
@@ -40,6 +41,25 @@ let nearingThresholdSeconds = thresholdSeconds * 2;
 const SOUND_STORAGE_KEY = "paceometer-sound";
 const savedSound = localStorage.getItem(SOUND_STORAGE_KEY) || "on";
 
+// --- Gas price (Settings -> Vehicle & Gas Cost) -----------------------------
+// A plain editable number, not a segmented control, so it's wired directly
+// here rather than via SegmentedSetting. Default verified directly against
+// AAA's national-average gas-price page on 2026-08-03 ($4.095/gal that day)
+// -- a starting point the driver is expected to correct to their local
+// price, not a claim about their actual cost.
+const GAS_PRICE_STORAGE_KEY = "paceometer-gas-price";
+const DEFAULT_GAS_PRICE_PER_GALLON = 4.1;
+let gasPricePerGallon = Number(localStorage.getItem(GAS_PRICE_STORAGE_KEY)) || DEFAULT_GAS_PRICE_PER_GALLON;
+const gasPriceInput = document.getElementById("gas-price");
+gasPriceInput.value = gasPricePerGallon;
+gasPriceInput.addEventListener("change", () => {
+  const value = Number(gasPriceInput.value);
+  if (value > 0) {
+    gasPricePerGallon = value;
+    localStorage.setItem(GAS_PRICE_STORAGE_KEY, String(value));
+  }
+});
+
 let zoneState = null; // "green" | "yellow" | "red" | "limit", null until the first valid reading
 
 const audioFeedback = new AudioFeedback({ muted: savedSound === "muted" });
@@ -57,6 +77,7 @@ const dashboardView = new DashboardView({
 
 const speedLimitService = new SpeedLimitService();
 const trip = new Trip();
+const vehiclePicker = new VehiclePicker();
 
 const geoTracker = new GeolocationTracker({
   onPosition: handlePosition,
@@ -117,7 +138,13 @@ function handlePosition(position) {
     dashboardView.setSpeed(mph);
     dashboardView.setPace(mph);
     const state = classifyZone(marginalSecondsSaved(mph), mph, knownSpeedLimitMph);
-    const progress = trip.recordSample(mph, timestamp, state, knownSpeedLimitMph);
+    const progress = trip.recordSample(
+      mph,
+      timestamp,
+      state,
+      knownSpeedLimitMph,
+      vehiclePicker.getSelectedVehicle()
+    );
     if (progress) {
       dashboardView.setTripZoneProgress(progress.pctInZoneSoFar, progress.timeSavedBySpeedingSoFar);
     }
@@ -163,7 +190,20 @@ async function endTrip() {
   // starts recording samples.
   dashboardView.setTripZoneProgress(null, null);
 
-  dashboardView.showTripSummary(summary.timeSavedBySpeedingSeconds, summary.distanceMiles, summary.elapsedSeconds);
+  // Gallons -> dollars conversion happens here, not in DashboardView, since
+  // app.js already owns the gas-price setting -- DashboardView stays a
+  // "dumb" renderer of whatever numbers it's handed, same as every other
+  // trip-summary field.
+  const gasCostUsd = summary.gallonsUsed !== null ? summary.gallonsUsed * gasPricePerGallon : null;
+  const gasCostSavedUsd =
+    summary.gallonsSavedBySpeeding !== null ? summary.gallonsSavedBySpeeding * gasPricePerGallon : null;
+  dashboardView.showTripSummary(
+    summary.timeSavedBySpeedingSeconds,
+    summary.distanceMiles,
+    summary.elapsedSeconds,
+    gasCostUsd,
+    gasCostSavedUsd
+  );
   dashboardView.setTripSummarySaveStatus("Saving…");
 
   const error = await saveTrip(summary);

@@ -145,6 +145,8 @@
       <div id="trip-summary-value" class="trip-summary-value">--</div>
       <div id="trip-summary-caption" class="trip-summary-caption"></div>
       <div id="trip-summary-detail" class="trip-summary-detail"></div>
+      <div id="trip-summary-gas-cost" class="trip-summary-gas-cost"></div>
+      <div id="trip-summary-gas-saved" class="trip-summary-gas-saved"></div>
       <div id="trip-summary-save-status" class="trip-summary-save-status" aria-live="polite"></div>
       <button id="trip-summary-dismiss" class="trip-btn" type="button">Continue Driving</button>
     </div>
@@ -237,6 +239,38 @@
           <button type="button" class="segmented-option" data-sound="on">Sound On</button>
           <button type="button" class="segmented-option" data-sound="muted">Muted</button>
         </div>
+      </section>
+
+      <section class="settings-section settings-section--accent-2">
+        <h2>
+          <span class="settings-icon-chip settings-icon-chip--accent-2">
+            <svg class="settings-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path d="M5 16h14M6 16V10l1.5-4h9L18 10v6M8 13h.01M16 13h.01" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          Vehicle &amp; Gas Cost
+        </h2>
+        <p>Pick your vehicle so the end-of-trip summary can estimate roughly what the trip cost in gas, and roughly how much of that came from driving over the speed limit. This uses EPA city/highway MPG figures for your exact year/trim, not real-time engine data, and only approximates aerodynamic drag above highway speed — treat it as a ballpark, not an exact number.</p>
+        <div id="vehicle-picker" class="vehicle-picker">
+          <select id="vehicle-make" class="vehicle-select" aria-label="Make">
+            <option value="">Make…</option>
+          </select>
+          <select id="vehicle-model" class="vehicle-select" aria-label="Model" disabled>
+            <option value="">Model…</option>
+          </select>
+          <select id="vehicle-year" class="vehicle-select" aria-label="Year" disabled>
+            <option value="">Year…</option>
+          </select>
+          <select id="vehicle-variant" class="vehicle-select" aria-label="Variant" disabled>
+            <option value="">Variant…</option>
+          </select>
+        </div>
+        <div id="vehicle-selected" class="vehicle-selected hidden">
+          <span id="vehicle-selected-label"></span>
+          <button id="vehicle-clear" class="link-btn" type="button">Clear</button>
+        </div>
+        <label for="gas-price" class="gas-price-label">Gas price ($/gallon)</label>
+        <input id="gas-price" class="gas-price-input" type="number" min="0" step="0.01" inputmode="decimal">
       </section>
 
       <button id="sign-out" class="trip-btn settings-sign-out" type="button">Sign out</button>

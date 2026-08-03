@@ -47,6 +47,7 @@ package "js/trip" as tripPkg {
 package "js/ui" as uiPkg {
   [DashboardView] as dashboardView
   [SegmentedSetting] as segmentedSetting
+  [VehiclePicker] as vehiclePicker
 }
 
 package "js/feedback" as fbPkg {
@@ -62,11 +63,13 @@ package "js/math  (pure functions, no classes)" as mathPkg #EAF3EA {
   [zoneState.js] as zoneState
   [geoMath.js] as geoMath
   [speedLimitParsing.js] as slParsing
+  [fuelMath.js] as fuelMath
 }
 
 auth --> appjs
 auth --> supa
 tripsApi --> supa
+vehiclePicker --> supa
 
 appjs --> geoTracker
 appjs --> sls
@@ -74,6 +77,7 @@ appjs --> tripClass
 appjs --> tripsApi
 appjs --> dashboardView
 appjs --> segmentedSetting
+appjs --> vehiclePicker
 appjs --> audioFeedback
 appjs --> simulatedDrive
 appjs ..> paceMath
@@ -85,6 +89,7 @@ sls ..> geoMath
 sls ..> slParsing
 slParsing ..> geoMath
 tripClass ..> paceMath
+tripClass ..> fuelMath
 dashboardView ..> zoneState
 dashboardView ..> paceMath
 simulatedDrive ..> paceMath
