@@ -67,26 +67,24 @@ export class VehiclePicker {
   }
 
   async _loadMakes() {
-    // Fetches the full make column and dedupes client-side rather than a
-    // server-side DISTINCT (postgrest-js has no query-builder support for
-    // that) -- fine at this table's size for a once-per-Settings-visit
-    // load; worth a dedicated view if the table grows enough to matter.
-    const { data, error } = await supabase.from("vehicle_fuel_economy").select("make").order("make");
+    // RPCs to public.vehicle_fuel_economy_makes() (see its migration) --
+    // a plain select+dedupe-client-side approach hit PostgREST's default
+    // 1000-row response cap (applies even with .order()) well before
+    // reaching the end of the alphabet, since 48,524 rows average 300+ per
+    // make. Doing the DISTINCT server-side sidesteps the cap entirely by
+    // only ever returning the ~150 rows actually needed.
+    const { data, error } = await supabase.rpc("vehicle_fuel_economy_makes");
     if (error || !data) return;
-    this._populateValues(this._makeEl, uniqueSorted(data.map((row) => row.make)), "Make…");
+    this._populateValues(this._makeEl, data.map((row) => row.make), "Make…");
   }
 
   async _onMakeChange() {
     this._resetFrom(this._modelEl);
     const make = this._makeEl.value;
     if (!make) return;
-    const { data, error } = await supabase
-      .from("vehicle_fuel_economy")
-      .select("model")
-      .eq("make", make)
-      .order("model");
+    const { data, error } = await supabase.rpc("vehicle_fuel_economy_models", { p_make: make });
     if (error || !data) return;
-    this._populateValues(this._modelEl, uniqueSorted(data.map((row) => row.model)), "Model…");
+    this._populateValues(this._modelEl, data.map((row) => row.model), "Model…");
   }
 
   async _onModelChange() {
@@ -94,14 +92,9 @@ export class VehiclePicker {
     const make = this._makeEl.value;
     const model = this._modelEl.value;
     if (!make || !model) return;
-    const { data, error } = await supabase
-      .from("vehicle_fuel_economy")
-      .select("year")
-      .eq("make", make)
-      .eq("model", model)
-      .order("year", { ascending: false });
+    const { data, error } = await supabase.rpc("vehicle_fuel_economy_years", { p_make: make, p_model: model });
     if (error || !data) return;
-    this._populateValues(this._yearEl, uniqueSorted(data.map((row) => row.year)), "Year…");
+    this._populateValues(this._yearEl, data.map((row) => row.year), "Year…");
   }
 
   async _onYearChange() {
@@ -175,10 +168,6 @@ function loadSelected() {
   } catch {
     return null;
   }
-}
-
-function uniqueSorted(values) {
-  return [...new Set(values)].sort();
 }
 
 // The CSV has no separate "trim" column -- this is what stands in for one,

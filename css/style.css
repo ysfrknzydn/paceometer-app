@@ -825,6 +825,13 @@ html, body {
   background: var(--surface);
   color: var(--text-primary);
   min-height: 44px;
+  /* Grid items default to a min-width based on their content's intrinsic
+     size, and a <select>'s intrinsic width is driven by its longest option
+     text ("American Motors Corporation") -- that overrides the 1fr track
+     sizing and pushes cells past the viewport edge unless explicitly told
+     it's allowed to shrink below that content width. */
+  min-width: 0;
+  width: 100%;
 }
 
 .vehicle-select:disabled {
