@@ -73,8 +73,8 @@
 
 - **Fuel-cost trip-summary copy needs a wording-review pass**: `#trip-summary-gas-cost`/`#trip-summary-gas-saved` (`js/ui/dashboardView.js`) are draft text, not yet run through the standing comprehension-check and never-reads-as-encouraging-speeding process the rest of the trip-summary copy went through (see the wording standing rule in CLAUDE.md).
 - **Fuel model's above-highway coefficient is a placeholder**, calibrated from a secondary-sourced rule of thumb (about 10% more fuel at 110 vs. 100 km/h), which `paceometer_lit_review/lit_review.md` itself flags as needing primary-source verification before academic citation. Tighten against Greene (1981) or Wang et al. (2008), both cited in that repo's section 7a, if this feature graduates past a rough estimate.
-- **`vehicles (1).csv` in the repo root can be deleted** once the weekly-refresh Action has been verified working end-to-end against a real Supabase project. It's untracked, so this is a local cleanup, not a git operation. The app now reads fuel-economy data from Supabase, not a shipped file.
-- **Add `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` as GitHub repo secrets** (Settings → Secrets and variables → Actions) before `weekly-fuel-data-refresh.yml` can run successfully. Not done as part of this session, since it's a credential only the repo owner should enter.
+
+Both resolved 2026-08-03, same day: GitHub repo secrets were added and the weekly Action verified working live; `vehicles (1).csv` has been deleted now that the pipeline is confirmed working end-to-end.
 
 - **Audio ideas raised but not built (2026-07-22)** — spoken zone-state/pace feedback and a spoken end-of-trip summary, both via the browser's built-in `SpeechSynthesis` API (zero-dependency, same reasoning as the chime above). Deliberately not built alongside the chime/tones: speaking pace/zone content out loud starts to look like active coaching rather than a passive display, which is the same category of concern that paused the Retention Hook below pending Professor Helveston's IRB input — raise with him before building either.
 
