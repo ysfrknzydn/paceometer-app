@@ -48,6 +48,7 @@ package "js/ui" as uiPkg {
   [DashboardView] as dashboardView
   [SegmentedSetting] as segmentedSetting
   [VehiclePicker] as vehiclePicker
+  [SearchableSelect] as searchableSelect
 }
 
 package "js/feedback" as fbPkg {
@@ -78,6 +79,7 @@ appjs --> tripsApi
 appjs --> dashboardView
 appjs --> segmentedSetting
 appjs --> vehiclePicker
+vehiclePicker --> searchableSelect
 appjs --> audioFeedback
 appjs --> simulatedDrive
 appjs ..> paceMath

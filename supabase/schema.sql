@@ -1,6 +1,0 @@
--- Deprecated: this single-file schema dump has been superseded by the
--- versioned migration files in supabase/migrations/, applied via
--- `supabase db push` (see CLAUDE.md "Database schema changes"). Kept here
--- only so `git log` on this path still shows the history that predates
--- migrations; do not edit or run this file. This file itself is safe to
--- delete whenever you're doing other cleanup in this area.

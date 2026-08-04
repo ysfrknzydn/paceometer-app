@@ -252,18 +252,26 @@
         </h2>
         <p>Pick your vehicle so the end-of-trip summary can estimate roughly what the trip cost in gas, and roughly how much of that came from driving over the speed limit. This uses EPA city/highway MPG figures for your exact year/trim, not real-time engine data, and only approximates aerodynamic drag above highway speed — treat it as a ballpark, not an exact number.</p>
         <div id="vehicle-picker" class="vehicle-picker">
-          <select id="vehicle-make" class="vehicle-select" aria-label="Make">
-            <option value="">Make…</option>
-          </select>
-          <select id="vehicle-model" class="vehicle-select" aria-label="Model" disabled>
-            <option value="">Model…</option>
-          </select>
-          <select id="vehicle-year" class="vehicle-select" aria-label="Year" disabled>
-            <option value="">Year…</option>
-          </select>
-          <select id="vehicle-variant" class="vehicle-select" aria-label="Variant" disabled>
-            <option value="">Variant…</option>
-          </select>
+          <div class="vehicle-field">
+            <select id="vehicle-make" class="vehicle-select" aria-label="Make">
+              <option value="">Make…</option>
+            </select>
+          </div>
+          <div class="vehicle-field">
+            <select id="vehicle-model" class="vehicle-select" aria-label="Model" disabled>
+              <option value="">Model…</option>
+            </select>
+          </div>
+          <div class="vehicle-field">
+            <select id="vehicle-year" class="vehicle-select" aria-label="Year" disabled>
+              <option value="">Year…</option>
+            </select>
+          </div>
+          <div class="vehicle-field">
+            <select id="vehicle-variant" class="vehicle-select" aria-label="Variant" disabled>
+              <option value="">Variant…</option>
+            </select>
+          </div>
         </div>
         <div id="vehicle-selected" class="vehicle-selected hidden">
           <span id="vehicle-selected-label"></span>

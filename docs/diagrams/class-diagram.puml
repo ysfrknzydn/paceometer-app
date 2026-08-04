@@ -95,6 +95,13 @@ class VehiclePicker {
   + getSelectedVehicle(): vehicle
 }
 
+class SearchableSelect {
+  - select
+  - input
+  --
+  + SearchableSelect(selectEl, config)
+}
+
 class AudioFeedback {
   - audioCtx
   - muted
@@ -118,6 +125,7 @@ App "1" *-down- "1" Trip : owns
 App "1" *-down- "1" DashboardView : owns
 App "1" *-down- "3" SegmentedSetting : owns
 App "1" *-down- "1" VehiclePicker : owns
+VehiclePicker "1" *-down- "4" SearchableSelect : owns
 App "1" *-down- "1" AudioFeedback : owns
 App "1" *-down- "1" SimulatedDrive : owns
 

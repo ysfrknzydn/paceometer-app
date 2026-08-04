@@ -815,6 +815,81 @@ html, body {
   margin-top: 0.9rem;
 }
 
+/* One grid cell per select; js/ui/searchableSelect.js replaces each
+   <select>'s own grid slot with an autocomplete combobox (search input +
+   popup listbox), moving the now-hidden <select> inside it as the real
+   value-holding form control. min-width: 0 here for the same reason as the
+   old plain-<select> grid -- see the narrow-viewport-overflow bug above. */
+.vehicle-field {
+  min-width: 0;
+}
+
+.searchable-select {
+  position: relative;
+  min-width: 0;
+}
+
+.searchable-select-input {
+  font-size: 0.95rem;
+  font-family: var(--font-body);
+  padding: 0.7rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid var(--border-eff);
+  background: var(--surface);
+  color: var(--text-primary);
+  min-height: 44px;
+  min-width: 0;
+  width: 100%;
+}
+
+.searchable-select-input:disabled {
+  opacity: 0.5;
+}
+
+.searchable-select-input:focus {
+  outline: none;
+  border-color: var(--accent-2);
+}
+
+.searchable-select-list {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  max-height: 220px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0.3rem;
+  list-style: none;
+  border-radius: 12px;
+  border: 1px solid var(--border-eff);
+  background: var(--surface);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3);
+}
+
+.searchable-select-list.hidden {
+  display: none;
+}
+
+.searchable-select-list li[role="option"] {
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.searchable-select-list li[role="option"].active {
+  background: var(--accent-2-dim);
+}
+
+.searchable-select-empty {
+  padding: 0.55rem 0.7rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
 .vehicle-select,
 .gas-price-input {
   font-size: 0.95rem;
@@ -1075,7 +1150,9 @@ html, body {
 }
 :root[data-theme="light"] .auth-form input,
 :root[data-theme="light"] .vehicle-select,
-:root[data-theme="light"] .gas-price-input {
+:root[data-theme="light"] .gas-price-input,
+:root[data-theme="light"] .searchable-select-input,
+:root[data-theme="light"] .searchable-select-list {
   background: #fff;
   border-color: var(--surface-border);
 }

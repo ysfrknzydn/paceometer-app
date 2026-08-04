@@ -13,6 +13,7 @@
 // no other module-level state in app.js that needs to react to a vehicle
 // change, so a callback would be a hook nobody uses.
 import { supabase } from "../supabaseClient.js";
+import { SearchableSelect } from "./searchableSelect.js";
 
 const VEHICLE_STORAGE_KEY = "paceometer-vehicle";
 
@@ -41,6 +42,11 @@ export class VehiclePicker {
     this._yearEl.addEventListener("change", () => this._onYearChange());
     this._variantEl.addEventListener("change", () => this._onVariantChange());
     this._clearBtn.addEventListener("click", () => this._clear());
+
+    new SearchableSelect(this._makeEl, { placeholder: "Search make…" });
+    new SearchableSelect(this._modelEl, { placeholder: "Search model…" });
+    new SearchableSelect(this._yearEl, { placeholder: "Search year…" });
+    new SearchableSelect(this._variantEl, { placeholder: "Search variant…" });
 
     this._selected = loadSelected();
     this._renderSelected();
