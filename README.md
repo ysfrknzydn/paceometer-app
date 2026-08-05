@@ -8,11 +8,11 @@ A real-time in-car pace/speed display, built as a Progressive Web App. Part of a
 - Shows a live pace readout (minutes required to cover 10 miles at the current speed) alongside speed — the debiasing display from Peer & Gamliel (2013).
 - A color-coded zone indicator that answers the app's core question at a glance: at your current speed, would going 10mph faster still save meaningful time? Three states purely from that time-savings math, plus a fourth, distinct state that overrides all of them whenever the app knows the posted speed limit near you and you're at or above it — so it never suggests speeding up past what's legal. Each state has a big color-matched number, hysteresis so GPS noise near the boundaries can't make it flicker, and a brief flash the moment the state actually changes. See "How the pace/zone math works" below for exactly where the boundaries come from and how sensitive the time-savings math is.
 - A second, trip-wide readout that updates continuously while a trip is recording: the running percentage of the trip spent where speed still meaningfully helps, plus a smaller line underneath showing the running version of the end-of-trip number (see below).
-- Email/password sign-in (Supabase Auth).
+- Email/password sign-in (Supabase Auth). **Invite-only as of 2026-08-05**: signup checks the email against an allowlist server-side (a Postgres Auth Hook) and rejects anything not on it with a plain explanation — ask the developer to add your email before trying to sign up.
 - Start/End Trip button that records average/min/max speed, distance, sample count, average pace, and two percentages (time in the zone, time at/under the posted speed limit), saving it to a Supabase database tied to the signed-in user. Ending a trip shows an end-of-trip summary — how much time speeding actually saved you against the posted speed limit, in seconds — before returning to the live view. See below for the full reasoning.
 - An always-on speed limit sign (top right of the live dashboard, styled like a real road sign) showing the posted limit near you whenever it's known — the same lookup the fourth zone state uses, just visible directly instead of only implied by a color. Coverage depends on OpenStreetMap's own data, so it won't have a reading everywhere, but as of 2026-07-27 it retries a couple of alternate sources and holds onto the last confirmed reading for a few minutes to cut down on the sign blanking out unnecessarily.
 - A settings screen (gear icon on the live dashboard) with a plain-language "About Paceometer" explainer (what the pace/zone numbers mean, honest about which parts are literature-backed vs. this project's own design choices), a privacy section describing exactly what is/isn't collected, a Zone Sensitivity control (Standard/Strict/Strictest) letting you adjust how big a time payoff counts as "worth it," and a Sound toggle to mute the chimes if they'd clash with music or a call (haptic feedback keeps working either way). Sign out lives here too.
-- A "Start Simulated Drive" dev tool for testing the whole display indoors, without a car — feeds a synthetic drive profile (Full range, Residential, Inner City, Highway, or Rural, picked from a dropdown) through the same code path as real GPS. Collapsed behind a "Dev tools" toggle by default so it doesn't clutter the live view. Needs to be removed before this app goes to real study participants (see `docs/CLAUDE.md`).
+- A "Start Simulated Drive" dev tool for testing the whole display indoors, without a car — feeds a synthetic drive profile (Full range, Residential, Inner City, Highway, or Rural, picked from a dropdown) through the same code path as real GPS. Hidden entirely unless the URL has `?dev` in it (e.g. `?dev=1`, as of 2026-08-05 — a real user visiting the plain URL never sees it), and collapsed behind a "Dev tools" toggle even then. Mutually exclusive with a real recorded trip (can't run both at once) so fake data can no longer land in real trip history. Needs to be removed entirely before this app goes to real study participants (see `docs/CLAUDE.md`).
 - A visual identity of George Washington University's official colors (Colonial blue / buff) and a monospace numeric readout, picked from a screenshotted comparison across candidate palettes and fonts. Light/dark appearance follows the phone's system setting by default, with a manual override (System/Light/Dark) in Settings.
 - A short audio/haptic cue plays whenever the traffic light actually changes state (pitched/pulsed by valence — green rings higher and pulses once, red rings lower and pulses three times) and on Start/End Trip, so a state change registers without having to look at the screen. The chime can be muted from Settings if it'll clash with music or a call; the haptic buzz isn't affected.
 - Built to WCAG AA contrast throughout (including a dedicated light-mode pass, verified with Lighthouse and axe-core), with screen-reader announcements for state changes and errors, real form labels, `prefers-reduced-motion` support, and touch targets sized for the platform minimum.
@@ -53,6 +53,8 @@ The end-of-trip gas-cost-saved number is clamped at 0 the same way the time-save
 ## Getting the app on your phone
 
 The app lives at **https://ysfrknzydn.github.io/paceometer-app/** — no App Store, no install file, just a URL.
+
+**Signup is invite-only** (as of 2026-08-05) — ask the developer to add your email before trying to sign up, or you'll get a plain "this app is invite-only" message instead of an account.
 
 **iPhone (Safari):**
 1. Open the URL above in **Safari** (not Chrome — iOS only allows "Add to Home Screen" PWA installs from Safari).
@@ -100,7 +102,8 @@ js/trip/                        trip-recording lifecycle + the Supabase save
 js/ui/                          dashboard DOM rendering, settings segmented controls, vehicle picker
 js/feedback/audioFeedback.js    zone-change chime/haptic, trip start/end tones
 js/dev/simulatedDrive.js        indoor-testing dev tool (see Pre-launch checklist below)
-manifest.json                    PWA "Add to Home Screen" config
+manifest.json                    PWA "Add to Home Screen" config, incl. icon references
+icons/                           PWA icons (source SVG + rasterized PNGs) for home-screen install
 supabase/migrations/            versioned database schema + Row Level Security policies
 python/paceometer_math/         dev-only Python port of js/math/ -- a pytest-tested second
                                  implementation checked against the same golden vectors as

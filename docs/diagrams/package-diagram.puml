@@ -95,5 +95,6 @@ tripClass ..> fuelMath
 dashboardView ..> zoneState
 dashboardView ..> paceMath
 simulatedDrive ..> paceMath
+simulatedDrive ..> tripClass
 
 @enduml

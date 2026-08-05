@@ -90,6 +90,7 @@ const simulatedDrive = new SimulatedDrive({
   geoTracker,
   speedLimitService,
   dashboardView,
+  trip,
 });
 
 // Core Function: at the current speed, would going +10mph still save
@@ -154,7 +155,7 @@ function handlePosition(position) {
 function handleGeoError(error) {
   switch (error.code) {
     case error.PERMISSION_DENIED:
-      dashboardView.setStatus("location permission denied", "error");
+      dashboardView.showLocationDenied();
       break;
     case error.POSITION_UNAVAILABLE:
       dashboardView.setStatus("GPS signal lost", "error");
@@ -174,6 +175,12 @@ function startTrip() {
   // No separate "Recording..." status text (2026-07-21 declutter pass) --
   // the button label above already says "End Trip".
   dashboardView.setTripZoneProgress(null, null);
+  // Isolation from the simulated-drive dev tool (2026-08-05, see
+  // js/dev/simulatedDrive.js) -- disabled for the entire real-trip
+  // lifecycle, re-enabled only once endTrip()'s save actually finishes
+  // (not right when recording stops), so there's never a window where
+  // both controls are simultaneously available.
+  simulatedDrive.setEnabled(false);
 }
 
 // Accessory Feature: the end-of-trip summary answers "how much did speeding
@@ -209,6 +216,7 @@ async function endTrip() {
   const error = await saveTrip(summary);
 
   dashboardView.setTripButtonDisabled(false);
+  simulatedDrive.setEnabled(true);
   dashboardView.setTripSummarySaveStatus(error ? `Save failed: ${error.message}` : "Trip saved.");
 }
 
@@ -261,6 +269,9 @@ export function stopApp() {
   geoTracker.releaseWakeLock();
   simulatedDrive.stop({ restartWatch: false });
   trip.cancel();
+  // Cross-account leak fix (2026-08-05) -- see VehiclePicker.clear()'s own
+  // comment. Session-ending cleanup, same reasoning as trip.cancel() above.
+  vehiclePicker.clear();
   dashboardView.setTripButtonText("Start Trip");
   dashboardView.setTripStatus("");
   dashboardView.setTripZoneProgress(null, null);

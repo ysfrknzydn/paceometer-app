@@ -107,11 +107,12 @@ function simulatedMphAtSecond(second, profile) {
 }
 
 export class SimulatedDrive {
-  constructor({ handlePosition, geoTracker, speedLimitService, dashboardView }) {
+  constructor({ handlePosition, geoTracker, speedLimitService, dashboardView, trip }) {
     this._handlePosition = handlePosition;
     this._geoTracker = geoTracker;
     this._speedLimitService = speedLimitService;
     this._dashboardView = dashboardView;
+    this._trip = trip;
     this._interval = null;
 
     this._toggleBtn = document.getElementById("simulate-toggle");
@@ -136,10 +137,38 @@ export class SimulatedDrive {
       const nowHidden = this._controlsEl.classList.toggle("hidden");
       this._toggleBtn.textContent = nowHidden ? "Dev tools ▶" : "Dev tools ▾";
     });
+
+    // Query-param gate (2026-08-05): this project has no build step to
+    // strip dev-only code at build time (deliberate, see docs/CLAUDE.md's
+    // Commands section), so a friend/family tester visiting the plain URL
+    // must never see even the collapsed "Dev tools ▸" toggle -- it sat
+    // directly next to the real trip controls with no explanation of what
+    // it does. Visiting with ?dev anywhere in the query string (e.g.
+    // ?dev=1) reveals it for the developer's own testing; the toggle is
+    // hidden entirely, not just left collapsed, for everyone else. This is
+    // NOT a security boundary (the JS still ships to every visitor either
+    // way) -- it's UI hygiene, not access control; the actual pre-launch
+    // requirement is still to delete this whole file, see the Pre-launch
+    // checklist in docs/CLAUDE.md.
+    if (!new URLSearchParams(location.search).has("dev")) {
+      this._toggleBtn.classList.add("hidden");
+    }
   }
 
+  // Isolation from real trip recording (2026-08-05): confirmed directly
+  // that, before this guard, a simulated drive fed synthetic samples
+  // through the exact same handlePosition()/recordSample() pipeline real
+  // GPS uses -- with nothing distinguishing fake data from real, a trip
+  // started for real and then run through a simulated drive saved a fake
+  // trip into the real `trips` table indistinguishably from a genuine one.
+  // setEnabled() below (called from app.js's startTrip()/endTrip()) is the
+  // primary guard -- it disables this tool's own Start button the moment a
+  // real trip begins recording, so the two controls can't both be active
+  // from normal UI use. This isRecording check is defense in depth against
+  // anything that could reach start() despite that (e.g. a stale button
+  // state), not the only thing preventing the overlap.
   start() {
-    if (this._interval !== null) return;
+    if (this._interval !== null || this._trip.isRecording) return;
     this._geoTracker.stopWatching();
 
     // Optional dev-only override so the "limit" zone state (and its
@@ -178,6 +207,10 @@ export class SimulatedDrive {
     this._btn.textContent = "Stop Simulated Drive";
     this._progressEl.classList.remove("hidden");
     this._progressFillEl.style.width = "0%";
+    // Mirror image of setEnabled() below -- the real Start Trip button
+    // can't be tapped while a simulated drive is feeding fake samples
+    // through the same pipeline.
+    this._dashboardView.setTripButtonDisabled(true);
   }
 
   // restartWatch is false when called from app.js's stopApp() -- the whole
@@ -197,6 +230,15 @@ export class SimulatedDrive {
     this._btn.textContent = "Start Simulated Drive";
     this._progressEl.classList.add("hidden");
     this._progressFillEl.style.width = "0%";
+    this._dashboardView.setTripButtonDisabled(false);
     if (restartWatch) this._geoTracker.startWatching();
+  }
+
+  // Called from app.js's startTrip()/endTrip() -- the other half of the
+  // isolation guard above, disabling this tool's own Start button for the
+  // duration of a real recorded trip.
+  setEnabled(enabled) {
+    this._btn.disabled = !enabled;
+    this._btn.title = enabled ? "" : "End the current trip before running a simulated drive.";
   }
 }

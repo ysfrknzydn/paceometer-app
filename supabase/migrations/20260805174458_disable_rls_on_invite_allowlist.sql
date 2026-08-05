@@ -1,0 +1,22 @@
+-- Bug fix (2026-08-05, found live-testing the invite-only signup hook added
+-- in 20260805170925_add_invite_allowlist_signup_hook.sql): this project has
+-- a setting that auto-enables Row Level Security on newly created tables,
+-- independent of whether the migration itself ever writes `enable row level
+-- security`. invite_allowlist got this applied silently, with zero policies
+-- defined -- which doesn't error, it just makes every row invisible to any
+-- role except the table owner (`postgres`, which bypasses RLS by default).
+--
+-- This was invisible to every check except an actual live signup attempt:
+-- calling the hook function directly from the SQL Editor runs as `postgres`
+-- (bypasses RLS, sees the row, looks correct); has_table_privilege() only
+-- checks table-level GRANTs, not RLS policies, so it also reported correct
+-- access. But the real "before-user-created" Auth Hook is invoked by
+-- Supabase Auth as `supabase_auth_admin` -- a non-owner role with no RLS
+-- policy granting it any rows -- so its SELECT against invite_allowlist
+-- always silently returned zero matches, rejecting every signup including
+-- ones for emails genuinely on the allowlist.
+--
+-- Fix: disable RLS explicitly, matching the original design intent (this
+-- table was always meant to be gated by table-level GRANT/REVOKE alone --
+-- see the original migration's comment -- not by RLS policies).
+alter table public.invite_allowlist disable row level security;

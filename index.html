@@ -16,6 +16,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Paceometer">
+  <!-- Real icons (2026-08-05) -- iOS ignores manifest.json's icons array
+       entirely for "Add to Home Screen" and needs this link specifically;
+       Android/desktop PWA installs use the manifest icons above. Both
+       rasterized from icons/icon-source.svg, the same brand mark as the
+       inline .brand-mark SVG below. Neither existed before, so "Add to
+       Home Screen" fell back to a generic icon. -->
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 
   <link rel="stylesheet" href="css/style.css">
 
@@ -145,10 +152,31 @@
       <div id="trip-summary-value" class="trip-summary-value">--</div>
       <div id="trip-summary-caption" class="trip-summary-caption"></div>
       <div id="trip-summary-detail" class="trip-summary-detail"></div>
-      <div id="trip-summary-gas-cost" class="trip-summary-gas-cost"></div>
-      <div id="trip-summary-gas-saved" class="trip-summary-gas-saved"></div>
+      <!-- Visual-hierarchy redesign (2026-08-05): boxed as its own card,
+           same visual language as .vehicle-selected in Settings, so the gas
+           figures read as a distinct secondary metric group instead of
+           just more stacked text at the same size/weight as everything
+           above. Hidden as a whole (not just empty text) when no vehicle
+           is selected -- see DashboardView.showTripSummary(). -->
+      <div id="trip-summary-cost" class="trip-summary-cost hidden">
+        <div id="trip-summary-gas-cost" class="trip-summary-cost-line"></div>
+        <div id="trip-summary-gas-saved" class="trip-summary-cost-line trip-summary-cost-line--muted"></div>
+      </div>
       <div id="trip-summary-save-status" class="trip-summary-save-status" aria-live="polite"></div>
       <button id="trip-summary-dismiss" class="trip-btn" type="button">Continue Driving</button>
+    </div>
+    <!-- Real UI for a denied location permission (2026-08-05, was a raw
+         uppercase status string at the top of the screen with no
+         explanation or way to recover). The app genuinely can't function
+         without location, so this replaces #readout/#trip-controls the
+         same way #trip-summary does, rather than just adding a corner
+         label. Cleared only by an actual reload, not a live retry -- see
+         DashboardView.showLocationDenied()'s comment for why. -->
+    <div id="location-denied" class="location-denied hidden">
+      <div class="location-denied-heading">Location access is off</div>
+      <p class="location-denied-body">Paceometer needs your location to calculate speed and pace — it can't work without it.</p>
+      <p class="location-denied-body">Check your browser's site settings (usually the lock or info icon next to the address bar), allow location for this site, then reload.</p>
+      <button id="location-denied-reload" class="trip-btn" type="button">Reload</button>
     </div>
   </main>
 
@@ -273,6 +301,10 @@
             </select>
           </div>
         </div>
+        <p id="vehicle-picker-error" class="vehicle-picker-error hidden" role="alert">
+          Couldn't load vehicle data.
+          <button id="vehicle-picker-retry" class="link-btn" type="button">Retry</button>
+        </p>
         <div id="vehicle-selected" class="vehicle-selected hidden">
           <span id="vehicle-selected-label"></span>
           <button id="vehicle-clear" class="link-btn" type="button">Clear</button>

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!-- PWA icon source (2026-08-05). Same brand mark as index.html's inline
+       .brand-mark SVG (ring, hand, dot), with the CSS custom property
+       colors baked in as literal hex since a standalone icon file has no
+       CSS context to pull accent colors from. Colors match the settled
+       GWU palette (docs/CLAUDE.md's "Visual identity" entry) and the dark
+       background matches manifest.json's background_color/theme_color, so
+       the icon reads consistently with the app itself. Rasterized to
+       icon-192.png/icon-512.png/apple-touch-icon.png via rsvg-convert;
+       regenerate the same way if this source ever changes. -->
+  <rect width="24" height="24" fill="#08080b"/>
+  <circle cx="12" cy="12" r="9" fill="none" stroke="#0096d6" stroke-width="1.6"/>
+  <path d="M12 12 L16 8" stroke="#a99768" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+  <circle cx="12" cy="12" r="1.4" fill="#a99768"/>
+</svg>

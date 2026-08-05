@@ -98,7 +98,19 @@ export class GeolocationTracker {
       const distance = haversineMeters(this._lastPosition.coords, coords);
       const seconds = (timestamp - this._lastPosition.timestamp) / 1000;
       if (seconds > 0) {
-        mph = (distance / seconds) * MPS_TO_MPH;
+        // Open bug fixed 2026-08-05: two fixes can differ by tens of meters
+        // from ordinary position noise even when both individually pass
+        // MAX_FIX_ACCURACY_METERS, which the old unconditional
+        // distance/seconds calc turned into a spurious non-zero speed for a
+        // genuinely stationary device. Only trust the delta as real motion
+        // once it exceeds what both fixes' own reported accuracy could
+        // explain as noise; ??0 treats a missing accuracy (the
+        // simulated-drive tool's synthetic fixes) as zero tolerance, same
+        // lenient handling as the remember-last-position check below --
+        // though in practice this branch never runs for sim fixes, which
+        // always set coords.speed directly.
+        const noiseRadius = (this._lastPosition.coords.accuracy ?? 0) + (coords.accuracy ?? 0);
+        mph = distance > noiseRadius ? (distance / seconds) * MPS_TO_MPH : 0;
       }
     }
 
