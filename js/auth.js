@@ -6,6 +6,7 @@
 // loose module-scope state (`mode`) and top-level functions.
 import { supabase } from "./supabaseClient.js";
 import { startApp, stopApp, setViewportZoomEnabled } from "./app.js";
+import { PasswordToggle } from "./ui/passwordToggle.js";
 
 class AuthController {
   constructor() {
@@ -18,7 +19,9 @@ class AuthController {
     this._passwordInput = document.getElementById("password");
     this._authError = document.getElementById("auth-error");
     this._authSubmit = document.getElementById("auth-submit");
-    this._authToggle = document.getElementById("auth-toggle");
+    this._authModeSwitch = document.getElementById("auth-mode-switch");
+    this._authModeOptions = this._authModeSwitch.querySelectorAll(".segmented-option");
+    this._signupExplainer = document.getElementById("signup-explainer");
     this._forgotPasswordBtn = document.getElementById("auth-forgot-password");
     this._backToSignInBtn = document.getElementById("auth-back-to-sign-in");
     this._resetConfirmForm = document.getElementById("reset-confirm-form");
@@ -26,10 +29,16 @@ class AuthController {
     this._resetConfirmSubmit = document.getElementById("reset-confirm-submit");
     this._signOutBtn = document.getElementById("sign-out");
 
+    new PasswordToggle(this._passwordInput, document.querySelector('[data-password-target="password"]'));
+    new PasswordToggle(
+      this._newPasswordInput,
+      document.querySelector('[data-password-target="new-password"]'),
+    );
+
     this._mode = "sign-in";
 
-    this._authToggle.addEventListener("click", () => {
-      this._setMode(this._mode === "sign-in" ? "sign-up" : "sign-in");
+    this._authModeOptions.forEach((btn) => {
+      btn.addEventListener("click", () => this._setMode(btn.dataset.authMode));
     });
 
     this._forgotPasswordBtn.addEventListener("click", () => {
@@ -98,7 +107,11 @@ class AuthController {
     this._authForm.classList.toggle("hidden", next === "reset-confirm");
     this._resetConfirmForm.classList.toggle("hidden", next !== "reset-confirm");
     this._forgotPasswordBtn.classList.toggle("hidden", next !== "sign-in");
-    this._authToggle.classList.toggle("hidden", next === "reset-request" || next === "reset-confirm");
+    this._authModeSwitch.classList.toggle(
+      "hidden",
+      next === "reset-request" || next === "reset-confirm",
+    );
+    this._signupExplainer.classList.toggle("hidden", next !== "sign-up");
     // Visible in both reset modes as a way out -- e.g. an expired/already-used
     // recovery link, or a driver who tapped "Forgot password?" by mistake.
     this._backToSignInBtn.classList.toggle(
@@ -108,8 +121,9 @@ class AuthController {
 
     if (next === "sign-in" || next === "sign-up") {
       this._authSubmit.textContent = next === "sign-in" ? "Sign in" : "Sign up";
-      this._authToggle.textContent =
-        next === "sign-in" ? "Need an account? Sign up" : "Have an account? Sign in";
+      this._authModeOptions.forEach((btn) => {
+        btn.setAttribute("aria-pressed", String(btn.dataset.authMode === next));
+      });
     } else if (next === "reset-request") {
       this._authSubmit.textContent = "Send reset link";
     }

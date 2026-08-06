@@ -77,6 +77,12 @@ const dashboardView = new DashboardView({
 
 const speedLimitService = new SpeedLimitService();
 const trip = new Trip();
+// Which trip handlePosition actually records into -- the real one by
+// default, swapped to SimulatedDrive's own internal Trip for the duration of
+// a simulated run (see js/dev/simulatedDrive.js's class-level comment) so a
+// demo can exercise the full recorded-trip pipeline, including the
+// end-of-trip summary, without ever touching real Supabase trip history.
+let activeTrip = trip;
 const vehiclePicker = new VehiclePicker();
 
 const geoTracker = new GeolocationTracker({
@@ -91,6 +97,13 @@ const simulatedDrive = new SimulatedDrive({
   speedLimitService,
   dashboardView,
   trip,
+  setActiveTrip: (nextTrip) => {
+    activeTrip = nextTrip;
+  },
+  onDemoTripFinished: (summary) => {
+    if (!summary) return;
+    showTripSummaryFor(summary, "Simulated trip — not saved.");
+  },
 });
 
 // Core Function: at the current speed, would going +10mph still save
@@ -139,7 +152,7 @@ function handlePosition(position) {
     dashboardView.setSpeed(mph);
     dashboardView.setPace(mph);
     const state = classifyZone(marginalSecondsSaved(mph), mph, knownSpeedLimitMph);
-    const progress = trip.recordSample(
+    const progress = activeTrip.recordSample(
       mph,
       timestamp,
       state,
@@ -183,6 +196,31 @@ function startTrip() {
   simulatedDrive.setEnabled(false);
 }
 
+// Shared by a real endTrip() and a finished simulated-drive demo trip (see
+// SimulatedDrive's onDemoTripFinished above) -- both hand this a raw
+// Trip.finish() summary and just want it converted and displayed the same
+// way. Gallons -> dollars conversion happens here, not in DashboardView,
+// since app.js already owns the gas-price setting -- DashboardView stays a
+// "dumb" renderer of whatever numbers it's handed, same as every other
+// trip-summary field. initialSaveStatus is the real endTrip()'s "Saving…"
+// (a transitional state a following setTripSummarySaveStatus call replaces
+// once the real Supabase save resolves) or the demo path's
+// "Simulated trip — not saved." (final, nothing follows it, since a demo
+// trip is deliberately never sent to Supabase at all).
+function showTripSummaryFor(summary, initialSaveStatus) {
+  const gasCostUsd = summary.gallonsUsed !== null ? summary.gallonsUsed * gasPricePerGallon : null;
+  const gasCostSavedUsd =
+    summary.gallonsSavedBySpeeding !== null ? summary.gallonsSavedBySpeeding * gasPricePerGallon : null;
+  dashboardView.showTripSummary(
+    summary.timeSavedBySpeedingSeconds,
+    summary.distanceMiles,
+    summary.elapsedSeconds,
+    gasCostUsd,
+    gasCostSavedUsd
+  );
+  dashboardView.setTripSummarySaveStatus(initialSaveStatus);
+}
+
 // Accessory Feature: the end-of-trip summary answers "how much did speeding
 // actually save you against the real, posted speed limit" -- see trip.js's
 // finish() for the full derivation.
@@ -197,21 +235,7 @@ async function endTrip() {
   // starts recording samples.
   dashboardView.setTripZoneProgress(null, null);
 
-  // Gallons -> dollars conversion happens here, not in DashboardView, since
-  // app.js already owns the gas-price setting -- DashboardView stays a
-  // "dumb" renderer of whatever numbers it's handed, same as every other
-  // trip-summary field.
-  const gasCostUsd = summary.gallonsUsed !== null ? summary.gallonsUsed * gasPricePerGallon : null;
-  const gasCostSavedUsd =
-    summary.gallonsSavedBySpeeding !== null ? summary.gallonsSavedBySpeeding * gasPricePerGallon : null;
-  dashboardView.showTripSummary(
-    summary.timeSavedBySpeedingSeconds,
-    summary.distanceMiles,
-    summary.elapsedSeconds,
-    gasCostUsd,
-    gasCostSavedUsd
-  );
-  dashboardView.setTripSummarySaveStatus("Saving…");
+  showTripSummaryFor(summary, "Saving…");
 
   const error = await saveTrip(summary);
 

@@ -11,6 +11,7 @@
 // rather than sharing DashboardView's) so removal is exactly "delete this
 // file + one import line + one HTML block," nothing scattered.
 import { MPS_TO_MPH } from "../math/paceMath.js";
+import { Trip } from "../trip/trip.js";
 
 // Elapsed-seconds -> target mph, piecewise linear, per profile. Not real
 // physics -- just enough shape per driving context to move speed/pace/zone
@@ -107,12 +108,35 @@ function simulatedMphAtSecond(second, profile) {
 }
 
 export class SimulatedDrive {
-  constructor({ handlePosition, geoTracker, speedLimitService, dashboardView, trip }) {
+  // setActiveTrip/onDemoTripFinished (2026-08-06): a real Start Trip couldn't
+  // run at the same time as a simulated drive even before this (the
+  // 2026-08-05 mutual-exclusion guard below), which also meant there was no
+  // way to demo the full recorded-trip pipeline -- including the end-of-trip
+  // summary -- without an actual drive. This tool now owns a second, entirely
+  // separate `Trip` instance (`_demoTrip`) and redirects app.js's shared
+  // `handlePosition` into it for the duration of a run via `setActiveTrip`,
+  // rather than borrowing the real `trip` the Start Trip button owns --
+  // `onDemoTripFinished` is how app.js gets told a demo trip finished so it
+  // can apply the same gas-cost conversion and call `showTripSummary()` the
+  // real endTrip() does, without this file needing to know about gas price
+  // at all (that stays app.js's concern, same separation as before).
+  constructor({
+    handlePosition,
+    geoTracker,
+    speedLimitService,
+    dashboardView,
+    trip,
+    setActiveTrip,
+    onDemoTripFinished,
+  }) {
     this._handlePosition = handlePosition;
     this._geoTracker = geoTracker;
     this._speedLimitService = speedLimitService;
     this._dashboardView = dashboardView;
     this._trip = trip;
+    this._setActiveTrip = setActiveTrip;
+    this._onDemoTripFinished = onDemoTripFinished;
+    this._demoTrip = new Trip();
     this._interval = null;
 
     this._toggleBtn = document.getElementById("simulate-toggle");
@@ -170,6 +194,11 @@ export class SimulatedDrive {
   start() {
     if (this._interval !== null || this._trip.isRecording) return;
     this._geoTracker.stopWatching();
+
+    // Own trip, own recording target -- see the class-level comment above.
+    // The real `trip` is never touched by a simulated run.
+    this._demoTrip.start();
+    this._setActiveTrip(this._demoTrip);
 
     // Optional dev-only override so the "limit" zone state (and its
     // colors/chime/haptic/trip-summary reframing) can be exercised without
@@ -232,6 +261,22 @@ export class SimulatedDrive {
     this._progressFillEl.style.width = "0%";
     this._dashboardView.setTripButtonDisabled(false);
     if (restartWatch) this._geoTracker.startWatching();
+
+    // Hand recording back to the real trip regardless of which path below
+    // runs -- a stray real GPS fix arriving right after this must never land
+    // in the just-finished (or discarded) demo trip.
+    this._setActiveTrip(this._trip);
+    if (restartWatch) {
+      // A normal stop (button click or a profile completing on its own) --
+      // show the demo trip's summary the same way a real End Trip does.
+      this._onDemoTripFinished(this._demoTrip.finish());
+    } else {
+      // Session ending (app.js's stopApp()) -- discard silently, same as
+      // trip.cancel() for the real trip in that same cleanup path. No
+      // summary screen makes sense to show on the way to the sign-out
+      // transition.
+      this._demoTrip.cancel();
+    }
   }
 
   // Called from app.js's startTrip()/endTrip() -- the other half of the

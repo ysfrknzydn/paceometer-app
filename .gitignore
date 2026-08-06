@@ -6,3 +6,9 @@ python/.venv/
 python/**/__pycache__/
 python/.pytest_cache/
 docs/TODO.pdf
+
+# tests/e2e (Playwright screen suite, see docs/CLAUDE.md's Commands section)
+test-screenshots/
+tests/e2e/.auth/
+tests/e2e/test-results/
+tests/e2e/playwright-report/

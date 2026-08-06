@@ -65,12 +65,51 @@
       <circle class="brand-mark-dot" cx="12" cy="12" r="1.4"/>
     </svg>
     <h1 class="brand">Paceometer</h1>
+    <!-- Real tab split (2026-08-06), replacing a small text-link toggle
+         below the submit button -- live testing showed people genuinely
+         couldn't tell which mode they were in, which caused real sign-in
+         errors (typing a new password into what they thought was a sign-up
+         form, etc.). Reuses the same .segmented-control/.segmented-option
+         CSS as Settings' Appearance/Zone Sensitivity controls for a
+         consistent look, but is wired directly in AuthController rather
+         than through SegmentedSetting -- that class is deliberately
+         localStorage-backed (see its own header comment), and which mode
+         this lands on is momentary UI state, not a persisted preference. -->
+    <div id="auth-mode-switch" class="segmented-control" role="group" aria-label="Sign in or sign up">
+      <button class="segmented-option" data-auth-mode="sign-in" type="button" aria-pressed="true">Sign in</button>
+      <button class="segmented-option" data-auth-mode="sign-up" type="button" aria-pressed="false">Sign up</button>
+    </div>
+    <!-- Sign-up comfort screen (2026-08-06), raised in live testing -- shown
+         alongside the sign-up form rather than only living in Settings ->
+         Privacy post-signup, so a new driver has a plain-language answer to
+         "why does this want my location" before they've committed to an
+         account. Deliberately short (see docs/CLAUDE.md) -- the real Privacy
+         Policy/ToS is a separate, later item, not this. Toggled by
+         AuthController's _setMode() alongside #auth-form itself. -->
+    <div id="signup-explainer" class="signup-explainer hidden">
+      <p>Your location is only ever used live, on your phone, to calculate your speed and check the posted limit near you — it's never stored or shared.</p>
+      <p>What Paceometer actually shows you is how much time speeding up would save (usually less than it feels like) instead of just your raw speed.</p>
+      <p>Only trip summaries like average speed are saved to your account, visible only to you.</p>
+    </div>
     <form id="auth-form" class="auth-form">
       <label for="email" class="sr-only">Email</label>
       <input id="email" type="email" placeholder="Email" autocomplete="email" required>
       <div id="password-field">
         <label for="password" class="sr-only">Password</label>
-        <input id="password" type="password" placeholder="Password" autocomplete="current-password" required minlength="6">
+        <div class="password-input-wrapper">
+          <input id="password" type="password" placeholder="Password" autocomplete="current-password" required minlength="6">
+          <button type="button" class="password-toggle" data-password-target="password" aria-label="Show password" aria-pressed="false">
+            <svg class="password-toggle-icon-eye" viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true">
+              <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+              <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/>
+            </svg>
+            <svg class="password-toggle-icon-eye-off" viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true">
+              <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+              <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/>
+              <line x1="3" y1="3" x2="21" y2="21" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
       </div>
       <button id="auth-submit" type="submit">Sign in</button>
     </form>
@@ -80,11 +119,23 @@
          comes from the recovery session Supabase established from the link. -->
     <form id="reset-confirm-form" class="auth-form hidden">
       <label for="new-password" class="sr-only">New password</label>
-      <input id="new-password" type="password" placeholder="New password" autocomplete="new-password" required minlength="6">
+      <div class="password-input-wrapper">
+        <input id="new-password" type="password" placeholder="New password" autocomplete="new-password" required minlength="6">
+        <button type="button" class="password-toggle" data-password-target="new-password" aria-label="Show password" aria-pressed="false">
+          <svg class="password-toggle-icon-eye" viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true">
+            <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/>
+          </svg>
+          <svg class="password-toggle-icon-eye-off" viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true">
+            <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/>
+            <line x1="3" y1="3" x2="21" y2="21" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
       <button id="reset-confirm-submit" type="submit">Set new password</button>
     </form>
     <button id="auth-forgot-password" class="link-btn" type="button">Forgot password?</button>
-    <button id="auth-toggle" class="link-btn" type="button">Need an account? Sign up</button>
     <button id="auth-back-to-sign-in" class="link-btn hidden" type="button">Back to sign in</button>
     <p id="auth-error" class="auth-error" aria-live="assertive"></p>
   </main>
@@ -99,13 +150,19 @@
     <!-- Always-on posted speed limit sign (2026-07-26), Google-Maps-style --
          a real feature under consideration for shipping, not a dev tool, so
          it isn't gated behind the "Dev tools" disclosure like the simulated-
-         drive controls. Colors are the real-world sign's (white/red/black),
+         drive controls. Colors are the real-world sign's (white/black),
          not themed to light/dark, matching how an actual road sign doesn't
          change color at night -- see DashboardView.setSpeedLimitSign in
          js/ui/dashboardView.js for
          how it's kept in sync with the same knownSpeedLimitMph the zone
-         logic already tracks. Hidden whenever no limit is currently known. -->
+         logic already tracks. Hidden whenever no limit is currently known.
+         Redesigned 2026-08-06 (raised in live testing) to match a real US
+         speed limit sign one-to-one -- was a circular red-ringed badge,
+         which reads as a European-style sign, not the rectangular
+         white/black one drivers actually recognize at a glance. -->
     <div id="speed-limit-sign" class="speed-limit-sign hidden" aria-live="polite">
+      <span class="speed-limit-sign-label">SPEED</span>
+      <span class="speed-limit-sign-label">LIMIT</span>
       <span id="speed-limit-sign-value" class="speed-limit-sign-value">--</span>
     </div>
     <div id="status" class="status">searching for GPS…</div>

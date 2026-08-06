@@ -170,6 +170,63 @@ html, body {
   color: var(--text-tertiary);
 }
 
+/* Password visibility toggle (2026-08-06) -- raised in live testing:
+   testers hit typos with no way to confirm what they'd actually typed
+   before submitting. Explicit width/box-sizing here rather than relying on
+   whatever made the plain (pre-wrapper) input fill .auth-form's width --
+   nesting one level deeper (input -> .password-input-wrapper ->
+   #password-field -> .auth-form) isn't guaranteed to inherit that
+   automatically, so this is self-sufficient instead of assuming it. */
+.password-input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.password-input-wrapper input {
+  width: 100%;
+  /* Room for the 44px toggle button so typed text never runs under it. */
+  padding-right: 2.75rem;
+}
+
+/* .auth-form .password-toggle, not just .password-toggle: the generic
+   ".auth-form button" rule (meant for the submit button) has higher
+   specificity than a single class alone and was silently winning, painting
+   this button with the primary button's gradient/shadow/padding -- caught
+   by looking at the actual screenshot, not visible from the source alone. */
+.auth-form .password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.25rem;
+  transform: translateY(-50%);
+  /* 44px touch target, same accessibility-pass minimum as .link-btn. */
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: var(--text-tertiary);
+  padding: 0;
+}
+
+/* aria-pressed reflects "currently showing the password" -- false (default)
+   shows the plain eye ("click to reveal"), true swaps to the slashed eye
+   ("click to hide"), the same convention as most password fields' own
+   built-in reveal icon. */
+.password-toggle-icon-eye-off {
+  display: none;
+}
+
+.password-toggle[aria-pressed="true"] .password-toggle-icon-eye {
+  display: none;
+}
+
+.password-toggle[aria-pressed="true"] .password-toggle-icon-eye-off {
+  display: block;
+}
+
 .auth-form button,
 .trip-btn {
   font-size: 1rem;
@@ -690,24 +747,35 @@ html, body {
 /* Always-on speed limit sign (2026-07-26) -- mirrors the settings-nav gear's
    corner placement/margin on the opposite side, so the two feel like a
    matched pair of fixed HUD elements rather than one-off placements.
-   Deliberately real-sign colors (white/red/black) rather than themed
-   variables -- a road sign doesn't change appearance in dark mode, and
-   staying visually literal is what makes it instantly readable at a glance,
-   the same reasoning as not color-theming the zone-indicator's semantic
-   green/yellow/red/limit colors elsewhere in this file. */
+   Deliberately real-sign colors (white/black) rather than themed variables
+   -- a road sign doesn't change appearance in dark mode, and staying
+   visually literal is what makes it instantly readable at a glance, the
+   same reasoning as not color-theming the zone-indicator's semantic
+   green/yellow/red/limit colors elsewhere in this file.
+
+   Redesigned 2026-08-06 (raised in live testing) from a circular
+   red-ringed badge -- which read as a European-style sign -- to a literal
+   US MUTCD-style speed limit sign: white rectangle, solid black border,
+   "SPEED"/"LIMIT" stacked exactly like the real sign (not crammed onto one
+   line -- the two-line stack is itself part of what makes it instantly
+   recognizable), large black number. Also switched off the app's own
+   branded numeric font for the value specifically -- its stylized
+   slashed-zero look is distinctive elsewhere in the app but reads as
+   "not a real sign" here, working against the entire point of this
+   redesign; a plain system sans is deliberately more generic, not less. */
 .speed-limit-sign {
   position: absolute;
   top: max(env(safe-area-inset-top), 16px);
   right: max(env(safe-area-inset-right), 16px);
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
+  width: 60px;
+  padding: 6px 0 8px;
+  border-radius: 4px;
   background: #fff;
-  border: 5px solid #c8102e;
+  border: 3px solid #000;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
   transition: opacity 0.2s ease;
 }
 
@@ -715,13 +783,23 @@ html, body {
   display: none;
 }
 
-.speed-limit-sign-value {
-  font-family: var(--font-numeric);
-  font-size: 1.5rem;
+.speed-limit-sign-label {
+  font-family: -apple-system, Helvetica, Arial, sans-serif;
+  font-size: 0.62rem;
   font-weight: 800;
-  color: #111;
+  letter-spacing: 0.03em;
+  color: #000;
+  line-height: 1.25;
+}
+
+.speed-limit-sign-value {
+  font-family: -apple-system, Helvetica, Arial, sans-serif;
+  font-size: 1.7rem;
+  font-weight: 800;
+  color: #000;
   font-variant-numeric: tabular-nums;
   line-height: 1;
+  margin-top: 2px;
 }
 
 .settings-screen {
@@ -820,6 +898,39 @@ html, body {
   display: flex;
   gap: 0.4rem;
   margin-top: 0.9rem;
+}
+
+/* #auth-screen (.screen) centers children at their intrinsic width, unlike
+   .settings-section (already full-width), so the sign-in/sign-up switch
+   needs the same explicit width/max-width .auth-form already sets to line
+   up with the form below it instead of shrinking to its own content. */
+#auth-mode-switch {
+  width: 100%;
+  max-width: 320px;
+}
+
+/* Sign-up comfort screen (2026-08-06) -- same "info card" visual language as
+   .trip-summary-cost/.vehicle-selected (rounded corners, --accent-2-dim
+   tint), same 320px width as everything else on this screen. Smaller/muted
+   text since this is a supporting explanation, not primary content the
+   driver needs to read every time. */
+.signup-explainer {
+  width: 100%;
+  max-width: 320px;
+  margin-top: 0.9rem;
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  background: var(--accent-2-dim);
+}
+
+.signup-explainer p {
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+.signup-explainer p + p {
+  margin-top: 0.5rem;
 }
 
 .segmented-option {

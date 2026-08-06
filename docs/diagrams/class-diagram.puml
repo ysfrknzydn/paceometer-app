@@ -108,6 +108,13 @@ class SearchableSelect {
   + SearchableSelect(selectEl, config)
 }
 
+class PasswordToggle {
+  - input
+  - button
+  --
+  + PasswordToggle(inputEl, buttonEl)
+}
+
 class AudioFeedback {
   - audioCtx
   - muted
@@ -120,6 +127,7 @@ class AudioFeedback {
 
 class SimulatedDrive {
   - interval
+  - demoTrip
   --
   + start()
   + stop(restartWatch)
@@ -127,6 +135,7 @@ class SimulatedDrive {
 }
 
 AuthController ..> App : «use» startApp/stopApp/\nsetViewportZoomEnabled
+AuthController "1" *-down- "2" PasswordToggle : owns
 
 App "1" *-down- "1" GeolocationTracker : owns
 App "1" *-down- "1" SpeedLimitService : owns
@@ -141,6 +150,7 @@ App "1" *-down- "1" SimulatedDrive : owns
 SimulatedDrive ..> GeolocationTracker : «use» start/stopWatching,\nresetLastPosition
 SimulatedDrive ..> SpeedLimitService : «use» setDevOverride,\nclearDevOverride
 SimulatedDrive ..> DashboardView : «use» setSpeedLimitSign,\nsetTripButtonDisabled
-SimulatedDrive ..> Trip : «use» isRecording
+SimulatedDrive ..> Trip : «use» isRecording (real trip)
+SimulatedDrive "1" *-down- "1" Trip : owns (own demo trip,\nnever the real one)
 
 @enduml

@@ -49,6 +49,7 @@ package "js/ui" as uiPkg {
   [SegmentedSetting] as segmentedSetting
   [VehiclePicker] as vehiclePicker
   [SearchableSelect] as searchableSelect
+  [PasswordToggle] as passwordToggle
 }
 
 package "js/feedback" as fbPkg {
@@ -69,6 +70,7 @@ package "js/math  (pure functions, no classes)" as mathPkg #EAF3EA {
 
 auth --> appjs
 auth --> supa
+auth --> passwordToggle
 tripsApi --> supa
 vehiclePicker --> supa
 

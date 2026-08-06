@@ -1,0 +1,12 @@
+{
+  "name": "paceometer-e2e-screens",
+  "private": true,
+  "type": "module",
+  "description": "Checked-in Playwright screen/state suite -- see docs/CLAUDE.md's Commands section for how and why to run this. Scoped to this directory deliberately: the shipped app itself still has zero build step / zero dependencies, same as python/ having its own separate tooling.",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0"
+  }
+}
