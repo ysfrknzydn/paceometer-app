@@ -68,11 +68,24 @@
     <form id="auth-form" class="auth-form">
       <label for="email" class="sr-only">Email</label>
       <input id="email" type="email" placeholder="Email" autocomplete="email" required>
-      <label for="password" class="sr-only">Password</label>
-      <input id="password" type="password" placeholder="Password" autocomplete="current-password" required minlength="6">
+      <div id="password-field">
+        <label for="password" class="sr-only">Password</label>
+        <input id="password" type="password" placeholder="Password" autocomplete="current-password" required minlength="6">
+      </div>
       <button id="auth-submit" type="submit">Sign in</button>
     </form>
+    <!-- Shown instead of #auth-form once a PASSWORD_RECOVERY auth event fires
+         (the driver clicked the emailed reset link) -- see AuthController's
+         "reset-confirm" mode in js/auth.js. No email field: identity already
+         comes from the recovery session Supabase established from the link. -->
+    <form id="reset-confirm-form" class="auth-form hidden">
+      <label for="new-password" class="sr-only">New password</label>
+      <input id="new-password" type="password" placeholder="New password" autocomplete="new-password" required minlength="6">
+      <button id="reset-confirm-submit" type="submit">Set new password</button>
+    </form>
+    <button id="auth-forgot-password" class="link-btn" type="button">Forgot password?</button>
     <button id="auth-toggle" class="link-btn" type="button">Need an account? Sign up</button>
+    <button id="auth-back-to-sign-in" class="link-btn hidden" type="button">Back to sign in</button>
     <p id="auth-error" class="auth-error" aria-live="assertive"></p>
   </main>
 
@@ -244,7 +257,7 @@
           </span>
           Zone Sensitivity
         </h2>
-        <p>How much time speeding up must save before the app calls it worthwhile. Standard matches Helveston's guidance; Strict and Strictest ask for a bigger payoff before agreeing it helps, which pushes the "no time left to gain" state to kick in at a lower speed.</p>
+        <p>How much time speeding up must save before the app calls it worthwhile. Standard is the project's default; Strict and Strictest ask for a bigger payoff before agreeing it helps, which pushes the "no time left to gain" state to kick in at a lower speed.</p>
         <div id="zone-threshold-switch" class="segmented-control" role="group" aria-label="Zone sensitivity">
           <button type="button" class="segmented-option" data-zone-threshold="standard">Standard</button>
           <button type="button" class="segmented-option" data-zone-threshold="strict">Strict</button>

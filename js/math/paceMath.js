@@ -22,8 +22,8 @@ export const ZONE_SPEED_INCREMENT_MPH = 10;
 
 // Driver-adjustable zone sensitivity (Settings -> Zone Sensitivity). Each
 // preset's nearing-threshold is exactly double thresholdSeconds -- none of
-// these specific numbers are literature-derived; "standard" (90s) is
-// Helveston's suggested default.
+// these specific numbers are literature-derived; "standard" (90s) is the
+// project's suggested default.
 export const ZONE_THRESHOLD_PRESETS = {
   standard: { label: "Standard", thresholdSeconds: 90 },
   strict: { label: "Strict", thresholdSeconds: 150 },

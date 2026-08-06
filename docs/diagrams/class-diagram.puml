@@ -16,6 +16,12 @@ skinparam class {
   StereotypeFontColor #8A6D1E
 }
 
+class AuthController <<entry point — js/auth.js>> {
+  - mode
+  --
+  + AuthController()
+}
+
 class App <<composition root — js/app.js, not a real class>> #FDF3D8 {
   - zoneState
   - thresholdSeconds
@@ -119,6 +125,8 @@ class SimulatedDrive {
   + stop(restartWatch)
   + setEnabled(enabled)
 }
+
+AuthController ..> App : «use» startApp/stopApp/\nsetViewportZoomEnabled
 
 App "1" *-down- "1" GeolocationTracker : owns
 App "1" *-down- "1" SpeedLimitService : owns
