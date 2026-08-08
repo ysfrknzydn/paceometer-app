@@ -293,7 +293,12 @@ async function endTrip() {
 
   dashboardView.setTripButtonDisabled(false);
   simulatedDrive.setEnabled(true);
-  dashboardView.setTripSummarySaveStatus(error ? `Save failed: ${error.message}` : "Trip saved.");
+  // Show the driver an actionable message, not the raw Supabase/Postgres
+  // error text -- that can include table/column/constraint names, which
+  // are implementation detail, not something a driver needs (or should
+  // see) to retry a save.
+  const saveStatus = error ? (error.message.startsWith("Not signed in") ? `Save failed: ${error.message}` : "Save failed — try again.") : "Trip saved.";
+  dashboardView.setTripSummarySaveStatus(saveStatus);
 }
 
 new SegmentedSetting({

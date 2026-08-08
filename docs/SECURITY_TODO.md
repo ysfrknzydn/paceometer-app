@@ -4,6 +4,8 @@ Findings from the `app-security-audit` skill run on 2026-08-08, covering the who
 
 Posture at time of audit: **🟡 Acceptable** — no critical/high findings (no secret exposure, no missing RLS, no SQL injection, no XSS, no auth bypass). Gaps were concentrated in the `transcribe-feedback` Edge Function, the one new piece of server-side attack surface added this session.
 
+**A second, independent full run of the same checklist happened later the same day** (a fresh pass through all ~35 items, not just re-reading this file's own self-report) and found the codebase matched everything claimed below, plus one new gap this file hadn't caught: the Edge Function validated file presence and size but not content-type. See the "Second-pass findings" section below for that fix and two related hardening changes made alongside it.
+
 **Status as of 2026-08-08: every actionable item is closed.** Both Medium findings fixed and deployed, all Low findings either fixed or investigated-and-deliberately-left-as-is with the reasoning recorded, both dashboard config checks confirmed tight. Nothing outstanding — see "What's already confirmed solid" at the bottom for what to keep protecting going forward.
 
 ## Medium — do these first
@@ -23,20 +25,32 @@ Posture at time of audit: **🟡 Acceptable** — no critical/high findings (no 
 - [x] **Auth Redirect URLs allow-list verified tight (2026-08-08).** Checked live in the dashboard: **Site URL** is `https://ysfrknzydn.github.io/paceometer-app/` (the real deployed app, not localhost — the earlier 2026-08-06 fix held). **Redirect URLs** has exactly one entry, `https://ysfrknzydn.github.io/paceometer-app/**` — the `**` wildcard only matches paths *under that same domain*, it can't redirect anywhere else. `js/auth.js`'s dynamically-built `redirectTo` (`window.location.origin`) is safe given this allow-list.
 - [x] **CAPTCHA — deliberately left off (2026-08-08), logged for later reconsideration.** Signup is already gated behind the invite-allowlist Auth Hook (blocks anyone not invited, bot or not), so CAPTCHA would mostly add friction for real invited people without stopping much it's actually good at, at this app's current invite-only scale. **Revisit if signup is ever opened beyond invite-only** — that's the point at which CAPTCHA starts pulling real weight.
 
+## Second-pass findings (2026-08-08, later the same day)
+
+- [x] **Validate the uploaded audio file's content-type, not just presence/size** — `transcribe-feedback` checked `audioFile instanceof File`, `size === 0`, and `size > MAX_AUDIO_BYTES`, but never checked `audioFile.type` before forwarding it to Groq. Low severity (the endpoint is already authenticated, rate-limited, and never persists the file — Groq validates it independently too), but a real gap against defense-in-depth. Fixed with an `ALLOWED_AUDIO_TYPES` allow-list (`audio/webm`, `audio/ogg`, `audio/mp4`, `audio/wav`, `audio/mpeg` — covers what `MediaRecorder`'s default actually produces per browser; `feedbackRecorder.js` never forces a `mimeType`), matched against `audioFile.type` with any codec suffix stripped (`Blob.type` can read `"audio/webm;codecs=opus"`). **Needs deploying — see handoff below.**
+- [x] **Stop surfacing raw Supabase/PostgREST error text on a failed trip save** — `js/app.js`'s `endTrip()` showed `` `Save failed: ${error.message}` `` verbatim, which can include column/constraint names. Low sensitivity (the schema's already public in this repo) but an unfiltered passthrough worth closing on principle, especially since it was flagged as an open item in the Informational section below rather than actually fixed. Now shows a generic "Save failed — try again." except for the one case that's genuinely actionable to the driver ("Not signed in").
+- [x] **Add `CHECK` constraints to the *text* columns the first `CHECK`-constraints pass missed** — the 2026-08-08 migration below (`20260808045856`) bounded every numeric column on `trips`/`feedback` but left `vehicle_label`, `user_agent`, and `zone_state` completely unbounded — a signed-in user could insert an arbitrarily long string into either, or a `zone_state` value outside the app's own `"green" | "yellow" | "red" | "limit" | null` vocabulary. Same reasoning as the original pass: RLS already blocks touching anyone else's data, so this is a cheap sanity bound on top of that, not a response to a proven exploit. New migration, `supabase/migrations/20260808151107_add_text_check_constraints_to_trips_and_feedback.sql`, `NOT VALID` for the same reason as the original pass (enforces on future writes, doesn't scan/risk failing against live rows). **Needs pushing — see handoff below.**
+
+**Investigated, deliberately left as-is (not a gap):**
+- **Session token in `localStorage`, not an httpOnly cookie.** Raised again this pass since it's the one remaining ⚠️ item with no code fix. Confirmed the reasoning still holds: an httpOnly cookie can only be set by a server responding to the login request, and this app has none — it's static HTML/CSS/JS on GitHub Pages talking directly to Supabase's REST/Auth API, with no request-handling layer anywhere that could emit a `Set-Cookie` header. Supabase's cookie-based session adapter (`@supabase/ssr`) exists but is built for frameworks with a server component (Next.js, SvelteKit) to proxy the cookie through — adopting it here means adding a real backend, which is an architecture decision for the project owner to make, not something a security-audit pass should slip in as a "fix." Left alone; mitigated by the same verified-clean XSS surface noted below (no known vector currently exploits this).
+
 ## Handoff — all done, nothing outstanding
 
-Everything actionable from this pass has been completed and confirmed:
+Everything actionable from the first pass has been completed and confirmed:
 - Edge Function redeployed (rate limiting, file-size cap, CORS allow-list) — confirmed live via a real `curl` against the deployed function.
 - `CHECK` constraints migration pushed — confirmed via `supabase migration list`.
 - Dashboard: password requirements strengthened, minimum length raised to 8, redirect-URL allow-list verified tight — all confirmed by the user directly in the dashboard.
 - Two items were investigated and deliberately left as-is, not forgotten: "Require current password when updating" (real risk of breaking the verified password-reset flow) and CAPTCHA (redundant given the invite-allowlist gate) — both logged above with the reasoning, in case either is worth revisiting if this app's scale or trust model ever changes.
 - "Prevent use of leaked passwords" is the one item that's genuinely unavailable, not skipped — paywalled on the Supabase Free plan.
 
+From the second pass, the user confirmed both are pushed:
+- `supabase functions deploy transcribe-feedback` — ships the content-type validation.
+- `supabase db push` — ships the new text-column `CHECK` constraints migration.
+
 ## Informational — no action needed, just documented
 
-- **Session token lives in `localStorage`, not an httpOnly cookie.** Supabase JS's default for a static SPA with no backend to set a cookie from — not fixable without adopting `@supabase/ssr` and a real server, out of scope for this project's zero-build architecture. Mitigated by a verified-clean XSS surface (every `innerHTML` occurrence in the codebase is an empty-string clear immediately followed by safe `textContent` population, confirmed by grep during the audit, not just trusted from prior docs).
-- **Error messages sometimes surface raw Supabase/PostgREST text** (e.g. `js/app.js`'s `"Save failed: ${error.message}"`). Can occasionally include constraint/table names — low sensitivity since the whole schema is already public in this repo anyway.
-- **`pip-audit` isn't installed**, so `python/requirements.txt` (dev-only fuel-pipeline tooling) wasn't checked for CVEs this pass. `npm audit` on the one real Node dependency tree (`tests/e2e/`) came back clean — 0 vulnerabilities.
+- **Session token lives in `localStorage`, not an httpOnly cookie.** See "Investigated, deliberately left as-is" above for the full reasoning — not fixable without adopting `@supabase/ssr` and a real server, which is an architecture decision, not a security-pass fix. Mitigated by a verified-clean XSS surface (every `innerHTML` occurrence in the codebase is an empty-string clear immediately followed by safe `textContent` population, confirmed by grep during both audit passes, not just trusted from prior docs).
+- **`pip-audit` isn't installed**, so `python/requirements.txt` (dev-only fuel-pipeline tooling) wasn't checked for CVEs this pass. `npm audit` on the one real Node dependency tree (`tests/e2e/`) came back clean both passes — 0 vulnerabilities; `@playwright/test` confirmed on latest (1.62.1) during the second pass.
 
 ## What's already confirmed solid (don't accidentally break these)
 

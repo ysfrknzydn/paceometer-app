@@ -55,6 +55,19 @@ const GROQ_MODEL = "whisper-large-v3-turbo";
 // 10MB is generous headroom, not a tight fit.
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
 
+// Covers the actual MediaRecorder default per browser (feedbackRecorder.js
+// doesn't force a mimeType): audio/webm on Chrome/Firefox-Linux,
+// audio/mp4 on Safari, audio/ogg on some Firefox builds. audio/wav and
+// audio/mpeg included as generic fallbacks. Blob.type can carry a codec
+// suffix (e.g. "audio/webm;codecs=opus"), hence the split below.
+const ALLOWED_AUDIO_TYPES = new Set([
+  "audio/webm",
+  "audio/ogg",
+  "audio/mp4",
+  "audio/wav",
+  "audio/mpeg",
+]);
+
 // Per-user, per-hour cap on feedback submissions -- generous for a real
 // bug-report/feedback use case (nobody legitimately submits 10+ in an
 // hour), tight enough to bound how much of Groq's shared daily quota one
@@ -97,6 +110,10 @@ Deno.serve(async (req) => {
   }
   if (audioFile.size > MAX_AUDIO_BYTES) {
     return errorResponse("Recording too large", 400);
+  }
+  const audioType = audioFile.type.split(";")[0].trim().toLowerCase();
+  if (!ALLOWED_AUDIO_TYPES.has(audioType)) {
+    return errorResponse("Unsupported file type", 400);
   }
 
   // Rate limit, scoped to the caller's own rows -- SUPABASE_URL/
