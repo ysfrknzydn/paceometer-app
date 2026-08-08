@@ -10,19 +10,43 @@ import {
   PACE_REFERENCE_MILES,
   paceSecondsFor,
 } from "../math/paceMath.js";
+import { mphToKmh, milesToKm, paceSecondsForKm, PACE_REFERENCE_KM } from "../math/unitsMath.js";
 
 // Default caption for the three time-savings states; overridden with the
-// known posted limit while the zone state is "limit".
-const DEFAULT_ZONE_CAPTION = `time saved at +${ZONE_SPEED_INCREMENT_MPH}mph`;
+// known posted limit while the zone state is "limit". A function, not a
+// fixed constant, since it depends on the driver's unit-system choice
+// (2026-08-07) -- see DashboardView.setUnitSystem().
+//
+// The "+16km/h" this produces is deliberately NOT rounded to a cleaner
+// metric number the way setPace()'s "/ 10km" is -- raised and confirmed
+// with the user (2026-08-07) after the pace fix. The difference: pace's
+// reference distance is a free display-only benchmark (safe to define an
+// independent round km figure for). ZONE_SPEED_INCREMENT_MPH is the literal
+// input to marginalSecondsSaved() -- the function that decides the actual
+// green/yellow/red state, this app's core safety feature -- so this caption
+// must stay an honest conversion of the real +10mph the classification
+// itself uses, not a rounder but different number. Giving metric mode its
+// own independent increment was considered and explicitly declined: it
+// would mean the traffic-light color could differ at the exact same real
+// driving speed depending only on which unit system is selected, a real
+// behavior change, not just display polish. See docs/CLAUDE.md.
+function defaultZoneCaption(unitSystem) {
+  return unitSystem === "metric"
+    ? `time saved at +${Math.round(mphToKmh(ZONE_SPEED_INCREMENT_MPH))}km/h`
+    : `time saved at +${ZONE_SPEED_INCREMENT_MPH}mph`;
+}
 
 const VIEWPORT_ZOOM_ENABLED = "width=device-width, initial-scale=1, viewport-fit=cover";
 const VIEWPORT_ZOOM_DISABLED =
   "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover";
 
 export class DashboardView {
-  constructor({ onTripButtonClick, onTripSummaryDismiss }) {
+  constructor({ onTripButtonClick, onTripSummaryDismiss, onTripsOpen }) {
+    this._unitSystem = "imperial";
+
     this._statusEl = document.getElementById("status");
     this._speedEl = document.getElementById("speed");
+    this._unitLabelEl = document.getElementById("unit");
     this._paceEl = document.getElementById("pace");
     this._zoneIndicatorEl = document.getElementById("zone-indicator");
     this._zoneStateEl = document.getElementById("zone-state");
@@ -52,9 +76,12 @@ export class DashboardView {
     this._settingsScreenEl = document.getElementById("settings-screen");
     this._settingsNavBtn = document.getElementById("settings-nav");
     this._settingsBackBtn = document.getElementById("settings-back");
+    this._tripsScreenEl = document.getElementById("trips-screen");
+    this._tripsNavBtn = document.getElementById("trips-nav");
+    this._tripsBackBtn = document.getElementById("trips-back");
     this._viewportMetaEl = document.querySelector('meta[name="viewport"]');
 
-    this._zoneCaptionEl.textContent = DEFAULT_ZONE_CAPTION;
+    this._zoneCaptionEl.textContent = defaultZoneCaption(this._unitSystem);
 
     this._tripBtn.addEventListener("click", onTripButtonClick);
     this._tripSummaryDismissBtn.addEventListener("click", onTripSummaryDismiss);
@@ -73,6 +100,24 @@ export class DashboardView {
     });
     this._settingsBackBtn.addEventListener("click", () => {
       this._settingsScreenEl.classList.add("hidden");
+      this._appScreenEl.classList.remove("hidden");
+      this.setViewportZoomEnabled(false);
+    });
+
+    // Trips history (2026-08-07): a 5th screen, independent of the auth
+    // listener and of the settings toggle above in exactly the same way --
+    // the driver stays signed in and #settings-screen stays untouched
+    // either way. onTripsOpen (called only on the way in, not on the way
+    // back out) is how app.js knows to fetch fresh trips each visit rather
+    // than this view reaching into Supabase itself.
+    this._tripsNavBtn.addEventListener("click", () => {
+      this._appScreenEl.classList.add("hidden");
+      this._tripsScreenEl.classList.remove("hidden");
+      this.setViewportZoomEnabled(true);
+      onTripsOpen();
+    });
+    this._tripsBackBtn.addEventListener("click", () => {
+      this._tripsScreenEl.classList.add("hidden");
       this._appScreenEl.classList.remove("hidden");
       this.setViewportZoomEnabled(false);
     });
@@ -108,8 +153,25 @@ export class DashboardView {
     this._locationDeniedEl.classList.remove("hidden");
   }
 
+  // Metric/imperial (2026-08-07): a display-only preference -- every value
+  // this method and the ones below receive is always plain mph/miles, the
+  // same real units Trip/the zone math/Supabase have always used; only how
+  // it's *shown* changes here. See js/math/unitsMath.js's header for the
+  // full "display boundary, not a math change" rationale.
+  setUnitSystem(unitSystem) {
+    this._unitSystem = unitSystem;
+    this._unitLabelEl.textContent = unitSystem === "metric" ? "km/h" : "mph";
+    // Only the idle "--" state needs a manual refresh here -- once a real
+    // zoneState exists, renderZone() is called on every GPS fix anyway and
+    // already reads this._unitSystem fresh each time.
+    if (this._zoneStateEl.textContent === "--") {
+      this._zoneCaptionEl.textContent = defaultZoneCaption(this._unitSystem);
+    }
+  }
+
   setSpeed(mph) {
-    this._speedEl.textContent = Math.max(0, Math.round(mph));
+    const displaySpeed = this._unitSystem === "metric" ? mphToKmh(mph) : mph;
+    this._speedEl.textContent = Math.max(0, Math.round(displaySpeed));
   }
 
   setPace(mph) {
@@ -118,22 +180,39 @@ export class DashboardView {
     // formula inline, which this project treats as literature-validated
     // (Peer & Gamliel 2013) and explicitly documents as needing to stay
     // traceable to one place; the duplicate risked silently diverging from
-    // paceSecondsFor if that formula ever changed.
+    // paceSecondsFor if that formula ever changed. Always fed the real,
+    // unconverted mph -- this is also the gate for whether a pace is shown
+    // at all (below PACE_MIN_SPEED_MPH) in *either* unit system, not just
+    // imperial's own displayed number.
     const totalSeconds = paceSecondsFor(mph);
     if (totalSeconds === null) {
       this._paceEl.textContent = "--";
       return;
     }
-    const rounded = Math.round(totalSeconds);
+
+    // Metric mode (revised 2026-08-07, raised as confusing): NOT a mi->km
+    // relabeling of totalSeconds above -- that would silently understate the
+    // real pace by ~62%, since 10mi != 10km (see unitsMath.js's
+    // paceSecondsForKm() header for the full reasoning). This is a genuinely
+    // separate, honestly-computed time-to-cover-a-real-10km, so the two unit
+    // systems show different numbers for the same real speed, on purpose.
+    const displaySeconds = this._unitSystem === "metric" ? paceSecondsForKm(mphToKmh(mph)) : totalSeconds;
+    const distanceLabel = this._unitSystem === "metric" ? `${PACE_REFERENCE_KM}km` : `${PACE_REFERENCE_MILES}mi`;
+
+    const rounded = Math.round(displaySeconds);
     const minutes = Math.floor(rounded / 60);
     const seconds = rounded % 60;
-    this._paceEl.textContent = `${minutes}:${String(seconds).padStart(2, "0")} / ${PACE_REFERENCE_MILES}mi`;
+    this._paceEl.textContent = `${minutes}:${String(seconds).padStart(2, "0")} / ${distanceLabel}`;
   }
 
   // Same exact numbers as the underlying math (marginal seconds saved by
   // +10mph over 10mi), just restructured for a faster read: a big
   // color-coded number carries the magnitude, the state word answers "does
-  // it help."
+  // it help." knownSpeedLimitMph is converted for the "limit" caption text
+  // below per the driver's unit preference -- unlike the separate, literal
+  // #speed-limit-sign element (setSpeedLimitSign(), always mph, mimicking
+  // the real physical sign), this caption is the app's own live narration,
+  // same family as the speed/pace readout it sits next to.
   renderZone(zoneState, rounded, knownSpeedLimitMph) {
     if (zoneState === null) {
       this._zoneStateEl.textContent = "--";
@@ -141,7 +220,7 @@ export class DashboardView {
       this._zoneValueEl.textContent = "--";
       this._zoneValueEl.className = "zone-value";
       this._zoneIndicatorEl.className = "zone-indicator";
-      this._zoneCaptionEl.textContent = DEFAULT_ZONE_CAPTION;
+      this._zoneCaptionEl.textContent = defaultZoneCaption(this._unitSystem);
       return;
     }
 
@@ -152,8 +231,10 @@ export class DashboardView {
     this._zoneIndicatorEl.className = "zone-indicator " + zoneState;
     this._zoneCaptionEl.textContent =
       zoneState === "limit"
-        ? `posted limit: ~${Math.round(knownSpeedLimitMph)}mph`
-        : DEFAULT_ZONE_CAPTION;
+        ? this._unitSystem === "metric"
+          ? `posted limit: ~${Math.round(mphToKmh(knownSpeedLimitMph))}km/h`
+          : `posted limit: ~${Math.round(knownSpeedLimitMph)}mph`
+        : defaultZoneCaption(this._unitSystem);
   }
 
   // Core Loop "state confirmed" cue: a brief flash plus a screen-reader
@@ -242,21 +323,34 @@ export class DashboardView {
       this._tripSummaryCaptionEl.textContent = "faster than if you'd strictly followed the speed limit";
     }
 
-    const miles = distanceMiles.toFixed(1);
+    const distanceLabel =
+      this._unitSystem === "metric"
+        ? `${milesToKm(distanceMiles).toFixed(1)}km`
+        : `${distanceMiles.toFixed(1)}mi`;
     const minutes = Math.round(elapsedSeconds / 60);
-    this._tripSummaryDetailEl.textContent = `${miles}mi in ${minutes}min`;
+    this._tripSummaryDetailEl.textContent = `${distanceLabel} in ${minutes}min`;
 
-    // Draft copy, not yet wording-reviewed -- see docs/TODO.md. The whole
-    // card is hidden (not just left empty) when no vehicle is selected
-    // (2026-08-05, visual-hierarchy redesign) -- an empty boxed card would
-    // otherwise show as a visible bordered box with nothing in it.
+    // Wording reviewed 2026-08-08 (see docs/TODO.md) -- the total-cost line
+    // needed no change (passed comprehension + never-encourages-speeding
+    // outright), but the second line originally read "only ~$X of that from
+    // driving over the limit." "only" is this app's standing prefix for
+    // underselling a *benefit* (see the "faster than the speed limit" line
+    // above) -- applied here to gasCostSavedUsd, which despite its variable
+    // name is always a *cost* (extra gas burned from speeding, clamped at 0
+    // so it can never read as "you saved money by speeding," see
+    // trip.js's finish()), "only" inverted the intended effect: it read as
+    // "speeding barely cost you anything," reassurance instead of a
+    // deterrent. Fixed to state the extra cost plainly, no minimizing.
+    // The whole card is hidden (not just left empty) when no vehicle is
+    // selected (2026-08-05, visual-hierarchy redesign) -- an empty boxed
+    // card would otherwise show as a visible bordered box with nothing in it.
     if (gasCostUsd === null) {
       this._tripSummaryCostEl.classList.add("hidden");
     } else {
       this._tripSummaryCostEl.classList.remove("hidden");
       this._tripSummaryGasCostEl.textContent = `~$${gasCostUsd.toFixed(2)} in gas this trip`;
       this._tripSummaryGasSavedEl.textContent =
-        gasCostSavedUsd === null ? "" : `only ~$${gasCostSavedUsd.toFixed(2)} of that from driving over the limit`;
+        gasCostSavedUsd === null ? "" : `~$${gasCostSavedUsd.toFixed(2)} of that was extra, from driving over the limit`;
     }
   }
 

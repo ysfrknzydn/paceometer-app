@@ -13,10 +13,15 @@ class AuthController {
     this._authScreen = document.getElementById("auth-screen");
     this._appScreen = document.getElementById("app");
     this._settingsScreen = document.getElementById("settings-screen");
+    this._tripsScreen = document.getElementById("trips-screen");
+    this._onboardingScreen = document.getElementById("onboarding-screen");
+    this._onboardingSettingsBtn = document.getElementById("onboarding-settings-btn");
+    this._onboardingSkipBtn = document.getElementById("onboarding-skip-btn");
     this._authForm = document.getElementById("auth-form");
     this._emailInput = document.getElementById("email");
     this._passwordField = document.getElementById("password-field");
     this._passwordInput = document.getElementById("password");
+    this._passwordRequirementsHint = document.getElementById("password-requirements-hint");
     this._authError = document.getElementById("auth-error");
     this._authSubmit = document.getElementById("auth-submit");
     this._authModeSwitch = document.getElementById("auth-mode-switch");
@@ -58,6 +63,21 @@ class AuthController {
       await supabase.auth.signOut();
     });
 
+    // Onboarding (2026-08-07): "Go to Settings" and "Skip for now" are
+    // equally direct one-tap exits, deliberately not styled to make Skip
+    // feel like the lesser option -- see _showOnboarding()'s own comment
+    // for when this screen shows at all.
+    this._onboardingSettingsBtn.addEventListener("click", () => {
+      this._onboardingScreen.classList.add("hidden");
+      this._settingsScreen.classList.remove("hidden");
+      setViewportZoomEnabled(true);
+    });
+    this._onboardingSkipBtn.addEventListener("click", () => {
+      this._onboardingScreen.classList.add("hidden");
+      this._appScreen.classList.remove("hidden");
+      setViewportZoomEnabled(false);
+    });
+
     // Only react to a genuine sign-in/sign-out transition, not every event
     // carrying a session (2026-08-05 fix) -- Supabase also fires this for
     // TOKEN_REFRESHED (roughly hourly, automatic) and USER_UPDATED. The
@@ -86,7 +106,16 @@ class AuthController {
       }
       if (!session) {
         this._showAuth();
-      } else if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
+      } else if (event === "SIGNED_IN") {
+        // A genuine fresh sign-in or sign-up (Supabase fires the same
+        // "SIGNED_IN" event for both, since this project's email
+        // confirmations are disabled -- see supabase/config.toml -- so a
+        // signup establishes a session immediately) -- onboarding shows
+        // here specifically, not on INITIAL_SESSION below, so a returning
+        // driver whose session was simply restored on reopening the app
+        // never sees it again.
+        this._showOnboarding();
+      } else if (event === "INITIAL_SESSION") {
         this._showApp();
       }
     });
@@ -104,6 +133,24 @@ class AuthController {
     const passwordNeeded = next === "sign-in" || next === "sign-up";
     this._passwordField.classList.toggle("hidden", !passwordNeeded);
     this._passwordInput.disabled = !passwordNeeded;
+    // Mode-dependent, not a static HTML attribute (2026-08-08, security
+    // review): #password is shared between sign-in and sign-up. Every
+    // account ever created here has always required at least 6 characters
+    // (Supabase's own long-standing minimum), so 6 is always safe for
+    // checking an *existing* password -- but the new 8-character minimum
+    // only applies to *new* passwords going forward. A static
+    // minlength="8" on this shared field would have client-side-blocked
+    // sign-in for any account with a password shorter than 8, even though
+    // their real credentials are entirely valid server-side -- a lockout
+    // bug, not a validation improvement. Sign-up gets the real new floor;
+    // sign-in keeps the permissive one.
+    this._passwordInput.minLength = next === "sign-up" ? 8 : 6;
+    // Same "sign-up only" reasoning as minLength just above -- an existing
+    // account's password was never validated against this rule and never
+    // will be at sign-in (Supabase only checks password policy at the
+    // moment a password is *set*), so showing this hint outside sign-up
+    // would be actively wrong information for a returning driver.
+    this._passwordRequirementsHint.classList.toggle("hidden", next !== "sign-up");
     this._authForm.classList.toggle("hidden", next === "reset-confirm");
     this._resetConfirmForm.classList.toggle("hidden", next !== "reset-confirm");
     this._forgotPasswordBtn.classList.toggle("hidden", next !== "sign-in");
@@ -208,8 +255,26 @@ class AuthController {
   _showApp() {
     this._authScreen.classList.add("hidden");
     this._settingsScreen.classList.add("hidden");
+    this._tripsScreen.classList.add("hidden");
+    this._onboardingScreen.classList.add("hidden");
     this._appScreen.classList.remove("hidden");
     setViewportZoomEnabled(false);
+    startApp();
+  }
+
+  // Shown only on a genuine "SIGNED_IN" event (see the listener above), not
+  // on every app open -- points a new driver at Settings to add their car
+  // and set preferences before their first drive. startApp() still runs
+  // immediately here, same as _showApp() -- GPS/wake-lock begin on sign-in
+  // regardless of which screen happens to be visible first, matching how
+  // Settings itself never pauses live tracking underneath it.
+  _showOnboarding() {
+    this._authScreen.classList.add("hidden");
+    this._settingsScreen.classList.add("hidden");
+    this._tripsScreen.classList.add("hidden");
+    this._appScreen.classList.add("hidden");
+    this._onboardingScreen.classList.remove("hidden");
+    setViewportZoomEnabled(true);
     startApp();
   }
 
@@ -220,6 +285,8 @@ class AuthController {
     stopApp();
     this._appScreen.classList.add("hidden");
     this._settingsScreen.classList.add("hidden");
+    this._tripsScreen.classList.add("hidden");
+    this._onboardingScreen.classList.add("hidden");
     this._authScreen.classList.remove("hidden");
     setViewportZoomEnabled(true);
     this._authForm.reset();

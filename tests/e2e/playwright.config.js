@@ -57,9 +57,12 @@ export default defineConfig({
     },
     {
       // The auth screen itself has to be exercised signed-out -- doesn't use
-      // the saved session.
+      // the saved session. Onboarding (2026-08-07) needs the same real,
+      // fresh sign-in for the same reason -- it only shows on a genuine
+      // SIGNED_IN event, which the "signed-in" project's restored session
+      // (INITIAL_SESSION) never fires.
       name: "signed-out",
-      testMatch: /auth\.spec\.js/,
+      testMatch: /(auth|onboarding)\.spec\.js/,
       use: { ...devices["Desktop Chrome"] },
     },
     {
@@ -67,7 +70,7 @@ export default defineConfig({
       // specs/auth.setup.js) instead of every spec paying for its own
       // network round trip.
       name: "signed-in",
-      testMatch: /(dashboard|tripSummary|settings|locationDenied|vehiclePickerError)\.spec\.js/,
+      testMatch: /(dashboard|tripSummary|tripHistory|settings|locationDenied|vehiclePickerError|units|feedback)\.spec\.js/,
       use: { ...devices["Desktop Chrome"], storageState: authStatePath },
       dependencies: ["setup"],
     },

@@ -53,6 +53,52 @@ for (const [state, scenario] of Object.entries(ZONE_STATE_SCENARIOS)) {
   }
 }
 
+test("manual gas/brake dev tool ramps simulated speed up and down", async ({ page }) => {
+  await page.goto("/?dev=1");
+  await expect(page.locator("#app")).toBeVisible();
+
+  await page.click("#simulate-toggle");
+  await page.selectOption("#simulate-profile", "manual");
+  await page.click("#simulate-btn");
+
+  await expect(page.locator("#simulate-manual-controls")).toBeVisible();
+  await expect(page.locator("#simulate-progress")).toBeHidden();
+  await expect(page.locator("#trip-btn")).toBeDisabled();
+
+  // Hold gas: pointerdown, wait a few ticks, pointerup -- simulates a held
+  // press rather than a tap, matching how SimulatedDrive's pointer listeners
+  // (not click) actually read the pedal.
+  const gasBtn = page.locator("#simulate-gas-btn");
+  await gasBtn.dispatchEvent("pointerdown");
+  await page.waitForTimeout(900);
+  await gasBtn.dispatchEvent("pointerup");
+
+  const speedAfterGas = await page.locator("#speed").textContent();
+  expect(Number(speedAfterGas)).toBeGreaterThan(0);
+  await captureScreenshot(page, "dashboard_simulate_manual_gas");
+
+  // Coasting (neither pedal held) should hold roughly steady, not decay --
+  // confirms release truly clears the held flag rather than leaving gas
+  // silently still applied.
+  await page.waitForTimeout(500);
+  const speedWhileCoasting = await page.locator("#speed").textContent();
+  expect(Math.abs(Number(speedWhileCoasting) - Number(speedAfterGas))).toBeLessThan(5);
+
+  // Hold brake: speed should come back down.
+  const brakeBtn = page.locator("#simulate-brake-btn");
+  await brakeBtn.dispatchEvent("pointerdown");
+  await page.waitForTimeout(900);
+  await brakeBtn.dispatchEvent("pointerup");
+
+  const speedAfterBrake = await page.locator("#speed").textContent();
+  expect(Number(speedAfterBrake)).toBeLessThan(Number(speedWhileCoasting));
+
+  await page.click("#simulate-btn"); // stop
+  await expect(page.locator("#simulate-manual-controls")).toBeHidden();
+  await expect(page.locator("#trip-summary")).toBeVisible();
+  await expect(page.locator("#trip-summary-save-status")).toHaveText("Simulated trip — not saved.");
+});
+
 test("simulated drive shows its own trip summary, never saved to Supabase", async ({ page }) => {
   const tripInserts = [];
   page.on("request", (req) => {

@@ -110,6 +110,16 @@
             </svg>
           </button>
         </div>
+        <!-- Sign-up only (AuthController._setMode() toggles this) -- an
+             existing account's password isn't re-checked against this rule
+             at sign-in (Supabase only ever validates password policy at the
+             moment a password is *set*, not when it's checked against the
+             stored hash), so showing this during sign-in would be actively
+             wrong information for a returning driver. Without this, the
+             character-class rule (enforced server-side only, no client-side
+             pattern check) was invisible until a driver got a Supabase
+             rejection error after already submitting. -->
+        <p id="password-requirements-hint" class="password-hint hidden">At least 8 characters, with uppercase, lowercase, a number, and a symbol.</p>
       </div>
       <button id="auth-submit" type="submit">Sign in</button>
     </form>
@@ -120,7 +130,7 @@
     <form id="reset-confirm-form" class="auth-form hidden">
       <label for="new-password" class="sr-only">New password</label>
       <div class="password-input-wrapper">
-        <input id="new-password" type="password" placeholder="New password" autocomplete="new-password" required minlength="6">
+        <input id="new-password" type="password" placeholder="New password" autocomplete="new-password" required minlength="8">
         <button type="button" class="password-toggle" data-password-target="new-password" aria-label="Show password" aria-pressed="false">
           <svg class="password-toggle-icon-eye" viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true">
             <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
@@ -133,6 +143,10 @@
           </svg>
         </button>
       </div>
+      <!-- Always relevant here, no mode toggle needed the way #password's
+           hint has one -- this field only ever exists to create a brand
+           new password (reset-confirm mode), never to check an old one. -->
+      <p class="password-hint">At least 8 characters, with uppercase, lowercase, a number, and a symbol.</p>
       <button id="reset-confirm-submit" type="submit">Set new password</button>
     </form>
     <button id="auth-forgot-password" class="link-btn" type="button">Forgot password?</button>
@@ -140,13 +154,71 @@
     <p id="auth-error" class="auth-error" aria-live="assertive"></p>
   </main>
 
+  <!-- Onboarding (2026-08-07): shown once right after a genuine sign-in or
+       sign-up (js/auth.js's AuthController, the "SIGNED_IN" event
+       specifically) -- not on every app open, since INITIAL_SESSION (a
+       returning driver whose session was just restored) still goes
+       straight to #app the way it always has. Points a new driver at
+       Settings to add their car and set preferences before their first
+       drive, without forcing it -- "Skip for now" goes straight to the live
+       dashboard just as readily as "Go to Settings" does. -->
+  <main id="onboarding-screen" class="screen hidden">
+    <h1 class="onboarding-heading">Quick setup (optional)</h1>
+    <p class="onboarding-body">Add your vehicle in Settings so trip summaries can estimate gas cost, and set your preferred units, zone sensitivity, and appearance. Takes under a minute — and everything here can be changed anytime.</p>
+    <button id="onboarding-settings-btn" class="trip-btn" type="button">Go to Settings</button>
+    <button id="onboarding-skip-btn" class="link-btn" type="button">Skip for now</button>
+  </main>
+
   <main id="app" class="screen hidden">
-    <button id="settings-nav" class="settings-nav" type="button" aria-label="Settings">
+    <!-- Text labels added 2026-08-07, raised as a real usability gap -- a
+         bare icon (especially the trips-history and feedback ones, which
+         have no single universally-recognized glyph the way a gear does)
+         doesn't read as "this is a Settings/Trips/Feedback tab" on a first
+         look. No aria-label anymore on any of these three buttons -- once a
+         button has real visible text, WCAG's "label in name" guidance says
+         the accessible name should include it rather than being overridden
+         by a same-meaning-but-different-wording aria-label; the visible
+         span below is now what supplies the accessible name. -->
+    <button id="settings-nav" class="settings-nav" type="button">
       <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
         <circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="3.2" stroke-dasharray="1.8 2.6" stroke-linecap="round"/>
         <circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.6"/>
       </svg>
+      <span class="nav-label">Settings</span>
     </button>
+    <!-- Trips history nav (2026-08-07) -- stacked directly under the
+         settings gear (same left margin, one button-height + gap below) so
+         the two read as a matched pair of corner controls rather than a
+         one-off placement. Toggles #app <-> #trips-screen the same
+         independent way settings-nav/back toggles #app <-> #settings-screen
+         -- see DashboardView's constructor. -->
+    <button id="trips-nav" class="trips-nav" type="button">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+        <rect x="4" y="3.5" width="16" height="17" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M7.5 8h9M7.5 12h9M7.5 16h5.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <span class="nav-label">Trips</span>
+    </button>
+    <!-- Voice feedback (2026-08-07, Tier 3.6) -- a third icon in the same
+         top-left corner stack as settings-nav/trips-nav above it, modeled
+         on Tesla's in-car voice feedback. Tap once to start recording, tap
+         again (or a 30s cap) to stop -- see js/ui/feedbackRecorder.js. Never
+         hides #readout/#trip-controls the way settings/trips do, since the
+         whole point is leaving feedback without losing sight of the live
+         speed/zone readout while driving; #feedback-panel below is a small
+         non-blocking status overlay instead. -->
+    <button id="feedback-nav" class="feedback-nav" type="button">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+        <rect x="9" y="3" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M6 11a6 6 0 0 0 12 0M12 17v3M9 20h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+      </svg>
+      <span class="nav-label">Feedback</span>
+    </button>
+    <div id="feedback-panel" class="feedback-panel hidden" role="status" aria-live="polite">
+      <span id="feedback-status" class="feedback-status"></span>
+      <button id="feedback-retry" class="link-btn feedback-retry hidden" type="button">Retry</button>
+      <button id="feedback-dismiss" class="link-btn feedback-dismiss hidden" type="button">Dismiss</button>
+    </div>
     <!-- Always-on posted speed limit sign (2026-07-26), Google-Maps-style --
          a real feature under consideration for shipping, not a dev tool, so
          it isn't gated behind the "Dev tools" disclosure like the simulated-
@@ -189,12 +261,12 @@
       <div id="trip-zone-progress" class="trip-zone-progress"></div>
       <div id="trip-zone-progress-time" class="trip-zone-progress-time"></div>
       <!-- Dev tool for testing indoors without driving. Remove this whole
-           block (toggle + dropdown + button + progress bar) along with
-           js/dev/simulatedDrive.js and its one import line in js/app.js
-           before shipping to real study participants -- see CLAUDE.md
-           pre-launch checklist. Collapsed behind a disclosure toggle by
-           default (2026-07-16) so it doesn't visually compete with the live
-           readout during a normal demo. -->
+           block (toggle + dropdown + button + progress bar + the manual
+           gas/brake controls below) along with js/dev/simulatedDrive.js and
+           its one import line in js/app.js before shipping to real study
+           participants -- see CLAUDE.md pre-launch checklist. Collapsed
+           behind a disclosure toggle by default (2026-07-16) so it doesn't
+           visually compete with the live readout during a normal demo. -->
       <button id="simulate-toggle" class="simulate-toggle link-btn" type="button">Dev tools &#9656;</button>
       <div id="simulate-controls" class="simulate-controls hidden">
         <select id="simulate-profile" class="simulate-profile">
@@ -203,12 +275,24 @@
           <option value="innerCity">Inner city</option>
           <option value="highway">Highway</option>
           <option value="rural">Rural</option>
+          <option value="manual">Manual (gas/brake)</option>
         </select>
         <input id="simulate-speed-limit" class="simulate-speed-limit" type="number" placeholder="sim. speed limit mph (optional)" min="0">
         <button id="simulate-btn" class="simulate-btn" type="button">Start Simulated Drive</button>
       </div>
       <div id="simulate-progress" class="simulate-progress hidden">
         <div id="simulate-progress-fill" class="simulate-progress-fill"></div>
+      </div>
+      <!-- Manual "gas/brake" driving (2026-08-07) -- an alternative to the
+           canned profiles above for demoing/testing interactively (hold gas
+           into a zone-state change, hold brake out of it, let go to coast)
+           instead of only watching a fixed script play out. Only shown while
+           a manual-mode simulated drive is actually running -- see
+           SimulatedDrive._startManual() in js/dev/simulatedDrive.js. -->
+      <div id="simulate-manual-controls" class="simulate-manual-controls hidden">
+        <div id="simulate-manual-speed" class="simulate-manual-speed">0 mph</div>
+        <button id="simulate-gas-btn" class="simulate-pedal-btn simulate-gas-btn" type="button">Gas</button>
+        <button id="simulate-brake-btn" class="simulate-pedal-btn simulate-brake-btn" type="button">Brake</button>
       </div>
     </div>
     <!-- Accessory Feature: end-of-trip summary, inline-swapped in place of
@@ -285,6 +369,7 @@
         <p>Your raw GPS location is used two ways: entirely on your phone to calculate your speed in the moment, and briefly sent to OpenStreetMap's free public speed-limit lookup (a service called Overpass) so the app can tell what the posted limit is near you. That lookup is transient — it's never stored by Paceometer, never sent to our database, and never logged anywhere.</p>
         <p>When you end a trip, only summary numbers are saved: average/min/max speed, distance, pace, and how much of the trip was spent where speeding up still meaningfully helped or at/under the posted speed limit. No route and no coordinates ever leave your phone or reach our database.</p>
         <p>Only you can see your own trips — the database is locked down so each signed-in driver can only read their own data.</p>
+        <p>The voice feedback button records a short clip only while you're actively using it, sends it once to be transcribed into text, and then the audio itself is discarded — it's never saved anywhere, by us or in transit. Only the resulting text is kept.</p>
       </section>
 
       <section class="settings-section">
@@ -302,6 +387,29 @@
           <button type="button" class="segmented-option" data-appearance="system">System</button>
           <button type="button" class="segmented-option" data-appearance="light">Light</button>
           <button type="button" class="segmented-option" data-appearance="dark">Dark</button>
+        </div>
+      </section>
+
+      <!-- Units (2026-08-07): a personal display preference, same family as
+           Appearance (light/dark) rather than a research-design choice like
+           Zone Sensitivity -- placed directly after Appearance for that
+           reason. Display-only: every live number this app actually
+           computes with stays mph/miles/gallons internally regardless of
+           this setting (js/math/unitsMath.js, DashboardView.setUnitSystem())
+           -- see docs/CLAUDE.md. -->
+      <section class="settings-section settings-section--accent-2">
+        <h2>
+          <span class="settings-icon-chip settings-icon-chip--accent-2">
+            <svg class="settings-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path d="M6 8h11M17 8l-3-3M17 8l-3 3M18 16H7M7 16l3-3M7 16l3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+          </span>
+          Units
+        </h2>
+        <p>Imperial (mph, miles, $/gallon) or metric (km/h, km, $/liter) for the speed, pace, distance, and gas-price displays. The always-on speed limit sign stays mph either way — it's meant to match the real posted sign, which is always in mph on US roads.</p>
+        <div id="unit-system-switch" class="segmented-control" role="group" aria-label="Units">
+          <button type="button" class="segmented-option" data-unit-system="imperial">Imperial</button>
+          <button type="button" class="segmented-option" data-unit-system="metric">Metric</button>
         </div>
       </section>
 
@@ -379,11 +487,32 @@
           <span id="vehicle-selected-label"></span>
           <button id="vehicle-clear" class="link-btn" type="button">Clear</button>
         </div>
-        <label for="gas-price" class="gas-price-label">Gas price ($/gallon)</label>
+        <label for="gas-price" id="gas-price-label" class="gas-price-label">Gas price ($/gallon)</label>
         <input id="gas-price" class="gas-price-input" type="number" min="0" step="0.01" inputmode="decimal">
       </section>
 
       <button id="sign-out" class="trip-btn settings-sign-out" type="button">Sign out</button>
+    </div>
+  </main>
+
+  <!-- Trip history (2026-08-07, Tier 3): a 5th top-level screen, same
+       top-aligned/scrollable settings-screen layout (reuses that class
+       directly rather than duplicating it) since a real trip list can run
+       taller than the viewport the same way the About/Privacy settings text
+       does. Populated by TripHistory (js/ui/tripHistory.js), fetched fresh
+       every time this screen opens -- see DashboardView's trips-nav
+       listener -- so a trip saved moments ago always shows up. -->
+  <main id="trips-screen" class="screen settings-screen hidden">
+    <div class="settings-content">
+      <button id="trips-back" class="link-btn settings-back" type="button">&larr; Back</button>
+      <h1 class="settings-heading">Trip History</h1>
+
+      <p id="trips-empty" class="trips-empty hidden">No trips yet — start a trip from the dashboard and it'll show up here once you end it.</p>
+      <p id="trips-error" class="trips-error hidden" role="alert">
+        Couldn't load your trip history.
+        <button id="trips-retry" class="link-btn" type="button">Retry</button>
+      </p>
+      <div id="trips-list" class="trips-list"></div>
     </div>
   </main>
 

@@ -4,8 +4,9 @@
 // exercised indoors without driving.
 //
 // REMOVE this whole file, its one import line in app.js, and the
-// #simulate-toggle/#simulate-controls/#simulate-progress block (+ its
-// .simulate-*/CSS rules) before shipping to real study participants -- see
+// #simulate-toggle/#simulate-controls/#simulate-progress/#simulate-manual-controls
+// block (+ its .simulate-*/CSS rules) before shipping to real study
+// participants -- see
 // docs/CLAUDE.md pre-launch checklist. It has no reason to exist outside
 // local dev testing. Deliberately self-contained (owns its own DOM refs
 // rather than sharing DashboardView's) so removal is exactly "delete this
@@ -92,6 +93,18 @@ const SIMULATED_DRIVE_PROFILES = {
   ],
 };
 
+// Manual "gas/brake" driving (2026-08-07): an alternative to the piecewise
+// profiles above for demoing/testing interactively rather than watching a
+// fixed script play out -- hold gas into a zone-state change, hold brake out
+// of it, let go to coast at whatever speed was last reached. Not modeling
+// real vehicle physics (no engine curve, no drag), just enough asymmetry
+// (braking faster than accelerating) to feel like a car rather than a linear
+// dial. MANUAL_MAX_MPH matches the "full range" profile's own ceiling.
+const MANUAL_TICK_MS = 150;
+const MANUAL_ACCEL_MPH_PER_TICK = 1.8;
+const MANUAL_DECEL_MPH_PER_TICK = 3;
+const MANUAL_MAX_MPH = 120;
+
 function simulatedMphAtSecond(second, profile) {
   let previousUntil = 0;
   let previousMph = 0;
@@ -146,6 +159,13 @@ export class SimulatedDrive {
     this._btn = document.getElementById("simulate-btn");
     this._progressEl = document.getElementById("simulate-progress");
     this._progressFillEl = document.getElementById("simulate-progress-fill");
+    this._manualControlsEl = document.getElementById("simulate-manual-controls");
+    this._manualSpeedEl = document.getElementById("simulate-manual-speed");
+    this._gasBtn = document.getElementById("simulate-gas-btn");
+    this._brakeBtn = document.getElementById("simulate-brake-btn");
+    this._manualMph = 0;
+    this._gasHeld = false;
+    this._brakeHeld = false;
 
     this._btn.addEventListener("click", () => {
       if (this._interval !== null) {
@@ -153,6 +173,27 @@ export class SimulatedDrive {
       } else {
         this.start();
       }
+    });
+
+    // Pointer events (not click) since gas/brake are held-down controls,
+    // not taps -- covers mouse and touch uniformly. Releasing off the
+    // button (pointerleave) or an interrupted gesture (pointercancel) both
+    // have to clear the held flag the same as a normal pointerup, or the
+    // pedal could get stuck "on" with no way to let go.
+    const bindPedal = (btn, setHeld) => {
+      btn.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        setHeld(true);
+      });
+      for (const evt of ["pointerup", "pointerleave", "pointercancel"]) {
+        btn.addEventListener(evt, () => setHeld(false));
+      }
+    };
+    bindPedal(this._gasBtn, (held) => {
+      this._gasHeld = held;
+    });
+    bindPedal(this._brakeBtn, (held) => {
+      this._brakeHeld = held;
     });
 
     // Collapsed by default (2026-07-16) so this dev-only control doesn't
@@ -211,6 +252,34 @@ export class SimulatedDrive {
       this._speedLimitService.clearDevOverride();
     }
 
+    this._profileEl.disabled = true;
+    this._speedLimitEl.disabled = true;
+    this._btn.textContent = "Stop Simulated Drive";
+    // Mirror image of setEnabled() below -- the real Start Trip button
+    // can't be tapped while a simulated drive is feeding fake samples
+    // through the same pipeline.
+    this._dashboardView.setTripButtonDisabled(true);
+
+    if (this._profileEl.value === "manual") {
+      this._startManual();
+    } else {
+      this._startProfile();
+    }
+  }
+
+  // Fake, fixed coordinates -- never real device location, and (like real
+  // fixes) never sent anywhere; only the derived mph leaves this.
+  _sendFix(mph) {
+    this._handlePosition({
+      coords: { speed: mph / MPS_TO_MPH, latitude: 0, longitude: 0 },
+      timestamp: Date.now(),
+    });
+  }
+
+  _startProfile() {
+    this._progressEl.classList.remove("hidden");
+    this._progressFillEl.style.width = "0%";
+
     const profile = SIMULATED_DRIVE_PROFILES[this._profileEl.value];
     const startedAt = Date.now();
     const totalDuration = profile[profile.length - 1].untilSecond;
@@ -222,24 +291,28 @@ export class SimulatedDrive {
         return;
       }
       const mph = simulatedMphAtSecond(elapsedSeconds, profile);
-      // Fake, fixed coordinates -- never real device location, and (like
-      // real fixes) never sent anywhere; only the derived mph leaves this.
-      this._handlePosition({
-        coords: { speed: mph / MPS_TO_MPH, latitude: 0, longitude: 0 },
-        timestamp: Date.now(),
-      });
+      this._sendFix(mph);
       this._progressFillEl.style.width = `${Math.min(elapsedSeconds / totalDuration, 1) * 100}%`;
     }, 1000);
+  }
 
-    this._profileEl.disabled = true;
-    this._speedLimitEl.disabled = true;
-    this._btn.textContent = "Stop Simulated Drive";
-    this._progressEl.classList.remove("hidden");
-    this._progressFillEl.style.width = "0%";
-    // Mirror image of setEnabled() below -- the real Start Trip button
-    // can't be tapped while a simulated drive is feeding fake samples
-    // through the same pipeline.
-    this._dashboardView.setTripButtonDisabled(true);
+  // Manual gas/brake driving -- see the class-level MANUAL_* constants'
+  // comment. No fixed duration/auto-stop the way a profile has one; the
+  // driver ends it by clicking "Stop Simulated Drive" whenever they want.
+  _startManual() {
+    this._manualMph = 0;
+    this._manualControlsEl.classList.remove("hidden");
+    this._manualSpeedEl.textContent = "0 mph";
+
+    this._interval = setInterval(() => {
+      if (this._gasHeld) {
+        this._manualMph = Math.min(this._manualMph + MANUAL_ACCEL_MPH_PER_TICK, MANUAL_MAX_MPH);
+      } else if (this._brakeHeld) {
+        this._manualMph = Math.max(this._manualMph - MANUAL_DECEL_MPH_PER_TICK, 0);
+      }
+      this._sendFix(this._manualMph);
+      this._manualSpeedEl.textContent = `${Math.round(this._manualMph)} mph`;
+    }, MANUAL_TICK_MS);
   }
 
   // restartWatch is false when called from app.js's stopApp() -- the whole
@@ -250,6 +323,8 @@ export class SimulatedDrive {
     if (this._interval === null) return;
     clearInterval(this._interval);
     this._interval = null;
+    this._gasHeld = false;
+    this._brakeHeld = false;
     this._geoTracker.resetLastPosition();
     this._speedLimitService.clearDevOverride();
     this._speedLimitService.resetKnownLimit();
@@ -259,6 +334,8 @@ export class SimulatedDrive {
     this._btn.textContent = "Start Simulated Drive";
     this._progressEl.classList.add("hidden");
     this._progressFillEl.style.width = "0%";
+    this._manualControlsEl.classList.add("hidden");
+    this._manualSpeedEl.textContent = "0 mph";
     this._dashboardView.setTripButtonDisabled(false);
     if (restartWatch) this._geoTracker.startWatching();
 

@@ -134,6 +134,19 @@ class SimulatedDrive {
   + setEnabled(enabled)
 }
 
+class TripHistory {
+  --
+  + load()
+}
+
+class FeedbackRecorder {
+  - mediaRecorder
+  - chunks
+  - lastRecordingBlob
+  --
+  + cancel()
+}
+
 AuthController ..> App : «use» startApp/stopApp/\nsetViewportZoomEnabled
 AuthController "1" *-down- "2" PasswordToggle : owns
 
@@ -141,11 +154,14 @@ App "1" *-down- "1" GeolocationTracker : owns
 App "1" *-down- "1" SpeedLimitService : owns
 App "1" *-down- "1" Trip : owns
 App "1" *-down- "1" DashboardView : owns
-App "1" *-down- "3" SegmentedSetting : owns
+App "1" *-down- "4" SegmentedSetting : owns
 App "1" *-down- "1" VehiclePicker : owns
 VehiclePicker "1" *-down- "4" SearchableSelect : owns
 App "1" *-down- "1" AudioFeedback : owns
 App "1" *-down- "1" SimulatedDrive : owns
+App "1" *-down- "1" TripHistory : owns
+App "1" *-down- "1" FeedbackRecorder : owns
+FeedbackRecorder ..> Trip : «use» isRecording (metadata\nsnapshot only)
 
 SimulatedDrive ..> GeolocationTracker : «use» start/stopWatching,\nresetLastPosition
 SimulatedDrive ..> SpeedLimitService : «use» setDevOverride,\nclearDevOverride

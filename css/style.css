@@ -144,12 +144,46 @@ html, body {
   letter-spacing: 0.01em;
 }
 
+/* Onboarding (2026-08-07) -- same centered .screen layout as #auth-screen,
+   same 320px reading width as .auth-form, so it reads as a natural
+   continuation of the screen the driver just came from rather than a new
+   visual language. */
+.onboarding-heading {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 0.9rem;
+  text-align: center;
+}
+
+.onboarding-body {
+  width: 100%;
+  max-width: 320px;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+#onboarding-settings-btn {
+  width: 100%;
+  max-width: 320px;
+}
+
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1.1rem;
   width: 100%;
   max-width: 320px;
+  /* Spacing pass (2026-08-07, screenshot review): previously had no margin
+     of its own, so it sat flush against whatever came directly above it
+     (the sign-in/sign-up tabs, or #signup-explainer in sign-up mode) --
+     applying it here rather than as margin-bottom on those elements keeps
+     the gap consistent regardless of which one precedes the form, and also
+     covers #reset-confirm-form (shares this class) directly following the
+     brand title when the tabs/explainer are hidden. */
+  margin-top: 1.25rem;
 }
 
 .auth-form input {
@@ -252,7 +286,7 @@ html, body {
 }
 
 .link-btn {
-  margin-top: 1rem;
+  margin-top: 1.1rem;
   /* min-height 44px + centered padding (2026-07-22 accessibility pass): had
      no vertical padding at all, measuring roughly 20px tall -- well under
      the 44/48px touch-target minimum. display:inline-flex keeps this from
@@ -275,6 +309,18 @@ html, body {
   font-size: 0.9rem;
   text-align: center;
   min-height: 1.2em;
+}
+
+/* Password requirements hint (2026-08-08, security review) -- the
+   character-class rule is enforced server-side only (no client-side
+   pattern check), so without this a driver only found out they were
+   missing a symbol/digit after already submitting and getting a Supabase
+   rejection back. */
+.password-hint {
+  margin-top: 0.5rem;
+  color: var(--text-tertiary);
+  font-size: 0.78rem;
+  line-height: 1.4;
 }
 
 .status {
@@ -719,29 +765,155 @@ html, body {
   background: #f59e0b;
 }
 
+/* Manual gas/brake dev tool (2026-08-07) -- same amber-dashed "not a real
+   app control" language as the rest of this dev-only block. */
+.simulate-manual-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 280px;
+  margin-top: 0.6rem;
+}
+
+.simulate-manual-speed {
+  flex: 1 1 100%;
+  font-family: var(--font-numeric);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+  color: #f59e0b;
+}
+
+.simulate-pedal-btn {
+  flex: 1;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.7rem 1rem;
+  border-radius: 10px;
+  border: 1px dashed #f59e0b;
+  background: transparent;
+  color: #f59e0b;
+  /* Held via pointerdown/up, not click -- touch-action:none stops the
+     browser treating a press-and-hold as a scroll/long-press gesture on
+     mobile, which would otherwise eat the pointerup and strand the pedal
+     "held" on. */
+  touch-action: none;
+  user-select: none;
+}
+
+.simulate-pedal-btn:active {
+  background: rgba(245, 158, 11, 0.18);
+}
+
 /* Surface Area Check (2026-07-16): settings screen, reachable from the
    live dashboard. Unlike the other .screen elements, its content can run
    taller than the viewport (paragraphs of About/Privacy text), so it
    overrides the centered/fixed layout with a top-aligned, scrollable one
    rather than clipping under body's overflow:hidden. */
-.settings-nav {
+/* Corner nav stack (settings/trips/feedback): icon + a short text label
+   (2026-08-07, raised as a real usability gap -- a bare icon doesn't read
+   as "this is a Settings/Trips/Feedback tab" on a first look, especially
+   for the trips-history and feedback icons, neither of which has a single
+   universally-recognized glyph the way a gear does). Was icon-only,
+   centered in a fixed 44x44 box; now a horizontal icon+label pill that
+   grows with its text instead, still >=44px tall for the touch target.
+   Kept borderless/backgroundless like before -- adding a label shouldn't
+   introduce a heavier "chip" visual language this HUD doesn't otherwise
+   have. `color` cascades to both the icon (stroke="currentColor") and the
+   label text, so .feedback-nav.recording's red pulse below already colors
+   both without any extra rule. */
+.settings-nav,
+.trips-nav,
+.feedback-nav {
   position: absolute;
-  /* env(safe-area-inset-top) resolves to a defined 0 on non-notch screens,
-     so the env() fallback never kicks in there -- max() guarantees the
-     16px margin either way instead of the button sitting flush at the
-     very edge. */
-  top: max(env(safe-area-inset-top), 16px);
   left: max(env(safe-area-inset-left), 16px);
   display: flex;
   align-items: center;
-  justify-content: center;
-  min-width: 44px;
+  gap: 0.45rem;
   min-height: 44px;
-  padding: 0;
+  padding: 0 0.5rem 0 0;
   background: none;
   border: none;
   color: var(--text-secondary);
   line-height: 1;
+  white-space: nowrap;
+}
+
+/* env(safe-area-inset-top) resolves to a defined 0 on non-notch screens, so
+   the env() fallback never kicks in there -- max() guarantees the 16px
+   margin either way instead of the button sitting flush at the very edge. */
+.settings-nav {
+  top: max(env(safe-area-inset-top), 16px);
+}
+
+/* Trips history nav (2026-08-07) -- stacked one button-height + 8px gap
+   below settings-nav, so the two read as a matched group. */
+.trips-nav {
+  top: calc(max(env(safe-area-inset-top), 16px) + 44px + 8px);
+}
+
+/* Voice feedback (2026-08-07) -- third row in the same corner stack, one
+   more button-height + gap below trips-nav. */
+.feedback-nav {
+  top: calc(max(env(safe-area-inset-top), 16px) + 2 * (44px + 8px));
+}
+
+.nav-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* Recording state -- pulses in the zone-indicator's own red so "this is
+   live and being captured" reads unambiguously, same semantic red used
+   everywhere else in this app. Respects prefers-reduced-motion the same way
+   the zone-flash animation does. */
+.feedback-nav.recording {
+  color: #f87171;
+  animation: feedback-pulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feedback-nav.recording {
+    animation: none;
+  }
+}
+
+@keyframes feedback-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* Status overlay -- deliberately NOT a screen swap like settings/trips;
+   #readout/#trip-controls stay visible underneath the whole time, since the
+   point is leaving feedback without losing sight of the live speed/zone
+   readout. Positioned as a centered banner below the corner-icon stack so
+   it never overlaps the speed number itself. */
+.feedback-panel {
+  position: absolute;
+  top: calc(max(env(safe-area-inset-top), 16px) + 3 * (44px + 8px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: calc(100% - 2rem);
+  padding: 0.6rem 1rem;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-eff);
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+.feedback-retry,
+.feedback-dismiss {
+  margin-top: 0;
+  font-size: 0.85rem;
+  white-space: nowrap;
 }
 
 /* Always-on speed limit sign (2026-07-26) -- mirrors the settings-nav gear's
@@ -1125,6 +1297,73 @@ html, body {
   width: 100%;
 }
 
+/* Trips history (2026-08-07): reuses .settings-content's width and the
+   card/section visual language already established elsewhere in this file
+   rather than inventing a new one. */
+.trips-empty {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+/* #trips-error (id, not just a class) for the same specificity reason as
+   #vehicle-picker-error just above -- a plain class here would lose to the
+   generic .settings-section p rule if this screen ever grows one. */
+#trips-error {
+  color: #f87171;
+  font-size: 0.85rem;
+}
+
+.trips-error .link-btn {
+  margin-top: 0;
+  margin-left: 0.3rem;
+  font-size: 0.85rem;
+}
+
+.trips-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.trip-history-card {
+  position: relative;
+  padding: 0.9rem 1rem;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border-eff);
+}
+
+.trip-history-date {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.trip-history-stats {
+  font-family: var(--font-numeric);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-top: 0.2rem;
+}
+
+.trip-history-secondary-line {
+  color: var(--text-tertiary);
+  font-size: 0.8rem;
+  margin-top: 0.3rem;
+}
+
+.trip-history-delete {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.75rem;
+  margin-top: 0;
+  font-size: 0.8rem;
+}
+
+.trip-history-delete--armed {
+  color: #f87171;
+}
+
 /* Phone turned on its side (mounted horizontally on the dash): the viewport
    is short and wide, so stack the readout and trip controls side by side
    instead of vertically. Sizes here are set explicitly off dvh (the
@@ -1244,6 +1483,20 @@ html, body {
     font-size: 0.75rem;
     padding: 0.5rem 0.75rem;
   }
+
+  .simulate-manual-controls {
+    max-width: 200px;
+    margin-top: 0.5rem;
+  }
+
+  .simulate-manual-speed {
+    font-size: 0.75rem;
+  }
+
+  .simulate-pedal-btn {
+    font-size: 0.75rem;
+    padding: 0.5rem 0.75rem;
+  }
 }
 
 /* Appearance: light / dark (2026-07-22). Replaces the six-mode texture/
@@ -1322,6 +1575,15 @@ html, body {
   .settings-section h2 { color: #0a648c; }
   .settings-section--accent-2 h2 { color: var(--extra-tint); }
   .settings-section p { color: var(--text-secondary); }
+  /* #vehicle-picker-error never got this same darkening under plain system
+     light (2026-08-07 catch, pre-existing gap unrelated to this session's
+     own #trips-error/.trip-history-delete--armed, which share the pattern
+     and would've inherited the same miss) -- only the explicit
+     :root[data-theme="light"] override below had it. Fixed for all three
+     at once rather than propagate the gap into new code. */
+  #vehicle-picker-error { color: #991b1b; }
+  #trips-error { color: #991b1b; }
+  .trip-history-delete--armed { color: #991b1b; }
 }
 
 :root[data-theme="light"] {
@@ -1370,6 +1632,8 @@ html, body {
    already used for the light-mode zone-indicator red text (2026-07-22
    accessibility pass) reused here for the same reason. */
 :root[data-theme="light"] #vehicle-picker-error { color: #991b1b; }
+:root[data-theme="light"] #trips-error { color: #991b1b; }
+:root[data-theme="light"] .trip-history-delete--armed { color: #991b1b; }
 
 /* Explicit "Dark" needs to restate the plain dark defaults so it can win
    even when the system/browser preference is light -- the @media block

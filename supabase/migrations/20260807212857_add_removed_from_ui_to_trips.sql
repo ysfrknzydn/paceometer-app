@@ -1,0 +1,11 @@
+-- Soft delete for the Trips history page (2026-08-07, revised same day):
+-- the "Delete" button there originally ran a real `delete()`, permanently
+-- gone the moment the second confirming click landed. Changed to a soft
+-- delete instead -- flips this flag rather than removing the row -- so a
+-- mistaken delete is recoverable (via the SQL Editor, developer-only, same
+-- as every other manual-fix case in this project) rather than gone for
+-- good. Default false so every existing row stays visible with no backfill
+-- needed. Reuses the `trips: users update own` RLS policy + `update` grant
+-- already added in the 20260804203954 migration for exactly this kind of
+-- case -- that policy had no concrete use case yet at the time; this is it.
+alter table public.trips add column if not exists removed_from_ui boolean not null default false;

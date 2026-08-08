@@ -29,6 +29,10 @@ export async function saveTrip(summary) {
     avg_pace_seconds: summary.avgPaceSeconds,
     pct_time_in_zone: summary.pctInZone,
     pct_time_under_limit: summary.pctTimeUnderLimit,
+    // Trip.finish() always computed this (the end-of-trip summary's own
+    // headline number) but it was never persisted until the Trips history
+    // page needed to show it per past trip (2026-08-07).
+    time_saved_by_speeding_seconds: summary.timeSavedBySpeedingSeconds,
     gallons_used: summary.gallonsUsed,
     gallons_saved_by_speeding: summary.gallonsSavedBySpeeding,
     vehicle_label: summary.vehicleLabel,

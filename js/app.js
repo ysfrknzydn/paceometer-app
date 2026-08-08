@@ -11,8 +11,11 @@ import { saveTrip } from "./trip/tripsApi.js";
 import { DashboardView } from "./ui/dashboardView.js";
 import { SegmentedSetting } from "./ui/settingsControls.js";
 import { VehiclePicker } from "./ui/vehiclePicker.js";
+import { TripHistory } from "./ui/tripHistory.js";
+import { FeedbackRecorder } from "./ui/feedbackRecorder.js";
 import { AudioFeedback } from "./feedback/audioFeedback.js";
 import { SimulatedDrive } from "./dev/simulatedDrive.js";
+import { gallonPriceToLiterPrice, literPriceToGallonPrice } from "./math/unitsMath.js";
 
 // --- Appearance: light / dark (2026-07-22) --------------------------------
 // A real shipped setting, not a dev tool. "system" is the default: it
@@ -41,22 +44,48 @@ let nearingThresholdSeconds = thresholdSeconds * 2;
 const SOUND_STORAGE_KEY = "paceometer-sound";
 const savedSound = localStorage.getItem(SOUND_STORAGE_KEY) || "on";
 
+// --- Units (Settings -> Units, 2026-08-07) ---------------------------------
+// Display-only, same "app.js owns the setting, views just render it" split
+// as everything else here -- see js/math/unitsMath.js's header. currentUnitSystem
+// is read by TripHistory (via a getter, same pattern as getGasPricePerGallon
+// below) and by the gas-price input logic just below it, since both need to
+// know the current choice without owning it themselves.
+const UNIT_SYSTEM_STORAGE_KEY = "paceometer-units";
+const savedUnitSystem = localStorage.getItem(UNIT_SYSTEM_STORAGE_KEY) || "imperial";
+let currentUnitSystem = savedUnitSystem;
+
 // --- Gas price (Settings -> Vehicle & Gas Cost) -----------------------------
 // A plain editable number, not a segmented control, so it's wired directly
 // here rather than via SegmentedSetting. Default verified directly against
 // AAA's national-average gas-price page on 2026-08-03 ($4.095/gal that day)
 // -- a starting point the driver is expected to correct to their local
-// price, not a claim about their actual cost.
+// price, not a claim about their actual cost. Always canonically stored as
+// $/gallon regardless of currentUnitSystem (gallonsPerMile's output is in
+// gallons, so no conversion is needed to turn it into a dollar cost) --
+// only the input's displayed/edited value converts to $/liter in metric,
+// via updateGasPriceInput() below.
 const GAS_PRICE_STORAGE_KEY = "paceometer-gas-price";
 const DEFAULT_GAS_PRICE_PER_GALLON = 4.1;
 let gasPricePerGallon = Number(localStorage.getItem(GAS_PRICE_STORAGE_KEY)) || DEFAULT_GAS_PRICE_PER_GALLON;
 const gasPriceInput = document.getElementById("gas-price");
-gasPriceInput.value = gasPricePerGallon;
+const gasPriceLabelEl = document.getElementById("gas-price-label");
+
+function updateGasPriceInput() {
+  if (currentUnitSystem === "metric") {
+    gasPriceLabelEl.textContent = "Gas price ($/liter)";
+    gasPriceInput.value = gallonPriceToLiterPrice(gasPricePerGallon).toFixed(2);
+  } else {
+    gasPriceLabelEl.textContent = "Gas price ($/gallon)";
+    gasPriceInput.value = gasPricePerGallon;
+  }
+}
+updateGasPriceInput();
+
 gasPriceInput.addEventListener("change", () => {
   const value = Number(gasPriceInput.value);
   if (value > 0) {
-    gasPricePerGallon = value;
-    localStorage.setItem(GAS_PRICE_STORAGE_KEY, String(value));
+    gasPricePerGallon = currentUnitSystem === "metric" ? literPriceToGallonPrice(value) : value;
+    localStorage.setItem(GAS_PRICE_STORAGE_KEY, String(gasPricePerGallon));
   }
 });
 
@@ -73,6 +102,29 @@ const dashboardView = new DashboardView({
     }
   },
   onTripSummaryDismiss: () => dashboardView.hideTripSummary(),
+  onTripsOpen: () => tripHistory.load(),
+});
+dashboardView.setUnitSystem(savedUnitSystem);
+
+// Trip history (2026-08-07): app.js still owns the gas-price setting (see
+// that entry above) and the unit-system setting (see above that), so
+// TripHistory gets getters rather than raw values, the same "stay a dumb
+// renderer of already-converted numbers" reasoning showTripSummaryFor()
+// below already follows for the live trip-summary gas lines.
+const tripHistory = new TripHistory({
+  getGasPricePerGallon: () => gasPricePerGallon,
+  getUnitSystem: () => currentUnitSystem,
+});
+
+// Voice feedback (2026-08-07): metadata snapshot getters, same callback
+// pattern as above -- zoneState is this file's own module-level `let`
+// (declared above), trip.isRecording is read fresh at send time via the
+// `trip` const declared just below (a forward reference that's fine here
+// since it's inside an arrow function, not called until well after the
+// whole module has finished evaluating, same as onTripButtonClick above).
+const feedbackRecorder = new FeedbackRecorder({
+  getZoneState: () => zoneState,
+  getIsRecordingTrip: () => trip.isRecording,
 });
 
 const speedLimitService = new SpeedLimitService();
@@ -265,6 +317,18 @@ new SegmentedSetting({
 });
 
 new SegmentedSetting({
+  containerId: "unit-system-switch",
+  datasetKey: "unitSystem",
+  storageKey: UNIT_SYSTEM_STORAGE_KEY,
+  initialValue: savedUnitSystem,
+  onChange: (value) => {
+    currentUnitSystem = value;
+    dashboardView.setUnitSystem(value);
+    updateGasPriceInput();
+  },
+});
+
+new SegmentedSetting({
   containerId: "sound-switch",
   datasetKey: "sound",
   storageKey: SOUND_STORAGE_KEY,
@@ -293,6 +357,7 @@ export function stopApp() {
   geoTracker.releaseWakeLock();
   simulatedDrive.stop({ restartWatch: false });
   trip.cancel();
+  feedbackRecorder.cancel();
   // Cross-account leak fix (2026-08-05) -- see VehiclePicker.clear()'s own
   // comment. Session-ending cleanup, same reasoning as trip.cancel() above.
   vehiclePicker.clear();
