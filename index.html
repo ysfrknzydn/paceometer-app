@@ -316,7 +316,10 @@
         <div id="trip-summary-gas-cost" class="trip-summary-cost-line"></div>
         <div id="trip-summary-gas-saved" class="trip-summary-cost-line trip-summary-cost-line--muted"></div>
       </div>
-      <div id="trip-summary-save-status" class="trip-summary-save-status" aria-live="polite"></div>
+      <div id="trip-summary-save-status" class="trip-summary-save-status" aria-live="polite">
+        <span id="trip-summary-save-status-text"></span>
+        <button id="trip-summary-save-retry" class="link-btn hidden" type="button">Retry</button>
+      </div>
       <button id="trip-summary-dismiss" class="trip-btn" type="button">Continue Driving</button>
     </div>
     <!-- Real UI for a denied location permission (2026-08-05, was a raw

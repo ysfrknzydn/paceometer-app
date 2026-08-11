@@ -26,6 +26,7 @@ class App <<composition root — js/app.js, not a real class>> #FDF3D8 {
   - zoneState
   - thresholdSeconds
   - nearingThresholdSeconds
+  - pendingSaveSummary
   --
   + startApp()
   + stopApp()
@@ -34,6 +35,8 @@ class App <<composition root — js/app.js, not a real class>> #FDF3D8 {
   - classifyZone(marginalSeconds, mph, knownLimitMph)
   - startTrip()
   - endTrip()
+  - attemptSaveTrip(summary, isRetry)
+  - resumeTripIfAny()
 }
 
 class GeolocationTracker {
@@ -66,12 +69,17 @@ class SpeedLimitService {
 class Trip {
   - recording
   - trip
+  - userId
+  - checkpointing
   --
   + isRecording: bool
-  + start()
+  + start(userId)
   + recordSample(mph, timestamp, zoneState, limit, vehicle): progress
   + finish(): summary
   + cancel()
+  + restoreFrom(checkpoint)
+  + {static} readCheckpoint(): checkpoint
+  + {static} clearCheckpoint()
 }
 
 class DashboardView {

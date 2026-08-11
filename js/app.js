@@ -4,6 +4,7 @@
 // zero changes for this restructure.
 import { ZONE_THRESHOLD_PRESETS, marginalSecondsSaved } from "./math/paceMath.js";
 import { nextZoneState } from "./math/zoneState.js";
+import { supabase } from "./supabaseClient.js";
 import { GeolocationTracker } from "./gps/geolocationTracker.js";
 import { SpeedLimitService } from "./speedLimit/speedLimitService.js";
 import { Trip } from "./trip/trip.js";
@@ -91,6 +92,13 @@ gasPriceInput.addEventListener("change", () => {
 
 let zoneState = null; // "green" | "yellow" | "red" | "limit", null until the first valid reading
 
+// The last trip summary that failed to save, kept around so a driver's
+// Retry click (2026-08-11, council review Tier 7 -- see attemptSaveTrip
+// below) resends the exact same data instead of nothing. Cleared on a
+// successful save and when the summary screen is dismissed, so a stale
+// summary can never be retried against a later trip.
+let pendingSaveSummary = null;
+
 const audioFeedback = new AudioFeedback({ muted: savedSound === "muted" });
 
 const dashboardView = new DashboardView({
@@ -101,7 +109,13 @@ const dashboardView = new DashboardView({
       startTrip();
     }
   },
-  onTripSummaryDismiss: () => dashboardView.hideTripSummary(),
+  onTripSummaryDismiss: () => {
+    pendingSaveSummary = null;
+    dashboardView.hideTripSummary();
+  },
+  onTripSummarySaveRetry: () => {
+    if (pendingSaveSummary) attemptSaveTrip(pendingSaveSummary, true);
+  },
   onTripsOpen: () => tripHistory.load(),
 });
 dashboardView.setUnitSystem(savedUnitSystem);
@@ -233,10 +247,21 @@ function handleGeoError(error) {
   }
 }
 
-function startTrip() {
+// async as of 2026-08-11 -- trip.start() now takes the signed-in driver's
+// user id (so the localStorage checkpoint it writes can be scoped to them,
+// see trip.js), read via a local, non-network getSession() call. The button
+// is disabled for that brief window (same setTripButtonDisabled endTrip()
+// already uses around its own async work) so a rapid double-tap can't fire
+// startTrip() twice before trip.isRecording flips true.
+async function startTrip() {
   audioFeedback.playTripStartTone();
-  trip.start();
+  dashboardView.setTripButtonDisabled(true);
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  trip.start(session?.user?.id ?? null);
   dashboardView.setTripButtonText("End Trip");
+  dashboardView.setTripButtonDisabled(false);
   // No separate "Recording..." status text (2026-07-21 declutter pass) --
   // the button label above already says "End Trip".
   dashboardView.setTripZoneProgress(null, null);
@@ -273,12 +298,41 @@ function showTripSummaryFor(summary, initialSaveStatus) {
   dashboardView.setTripSummarySaveStatus(initialSaveStatus);
 }
 
+// Shared by endTrip()'s initial save attempt and a driver-triggered retry
+// (dashboardView's onTripSummarySaveRetry callback above) -- both just want
+// to attempt the same Supabase insert and update the save-status UI the
+// same way. Added 2026-08-11 per council review (docs/TODO.md Tier 7): a
+// failed save previously had no way back -- the trip's data sat in memory
+// and was silently discarded the moment the summary screen was dismissed.
+async function attemptSaveTrip(summary, isRetry) {
+  dashboardView.setTripSummarySaveStatus(isRetry ? "Retrying…" : "Saving…");
+
+  const error = await saveTrip(summary);
+
+  if (error) {
+    pendingSaveSummary = summary;
+    // Show the driver an actionable message, not the raw Supabase/Postgres
+    // error text -- that can include table/column/constraint names, which
+    // are implementation detail, not something a driver needs (or should
+    // see) to retry a save.
+    const saveStatus = error.message.startsWith("Not signed in") ? `Save failed: ${error.message}` : "Save failed — try again.";
+    dashboardView.setTripSummarySaveStatus(saveStatus, { retryable: true });
+  } else {
+    pendingSaveSummary = null;
+    dashboardView.setTripSummarySaveStatus("Trip saved.");
+  }
+}
+
 // Accessory Feature: the end-of-trip summary answers "how much did speeding
 // actually save you against the real, posted speed limit" -- see trip.js's
 // finish() for the full derivation.
 async function endTrip() {
   audioFeedback.playTripEndTone();
   const summary = trip.finish();
+  // Captured once here rather than left for tripsApi.js to stamp with
+  // `new Date()` on every call -- otherwise a driver retrying minutes after
+  // ending the trip would save a wrong, drifted ended_at each attempt.
+  summary.endedAt = new Date();
   dashboardView.setTripButtonText("Start Trip");
   dashboardView.setTripButtonDisabled(true);
   dashboardView.setTripStatus("");
@@ -289,16 +343,10 @@ async function endTrip() {
 
   showTripSummaryFor(summary, "Saving…");
 
-  const error = await saveTrip(summary);
-
   dashboardView.setTripButtonDisabled(false);
   simulatedDrive.setEnabled(true);
-  // Show the driver an actionable message, not the raw Supabase/Postgres
-  // error text -- that can include table/column/constraint names, which
-  // are implementation detail, not something a driver needs (or should
-  // see) to retry a save.
-  const saveStatus = error ? (error.message.startsWith("Not signed in") ? `Save failed: ${error.message}` : "Save failed — try again.") : "Trip saved.";
-  dashboardView.setTripSummarySaveStatus(saveStatus);
+
+  await attemptSaveTrip(summary, false);
 }
 
 new SegmentedSetting({
@@ -347,6 +395,42 @@ export function setViewportZoomEnabled(enabled) {
   dashboardView.setViewportZoomEnabled(enabled);
 }
 
+// Checkpoint recovery (2026-08-11, council review -- docs/TODO.md Tier 7):
+// runs once per startApp() call (i.e. once per genuine sign-in or restored
+// session, not on every token refresh -- see auth.js's own SIGNED_IN/
+// INITIAL_SESSION-only gating) so a trip interrupted by a crash, reload, or
+// the phone killing a backgrounded tab picks back up instead of vanishing.
+// See trip.js's own header for the staleness cutoff and why
+// lastSampleTimestamp resets on restore.
+async function resumeTripIfAny() {
+  const checkpoint = Trip.readCheckpoint();
+  if (!checkpoint) return;
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const currentUserId = session?.user?.id ?? null;
+
+  // Cross-account safety -- same class of bug already found and fixed once
+  // for VehiclePicker's cached vehicle selection (2026-08-05, see
+  // docs/CLAUDE.md): a shared device signing in as a different person than
+  // whoever left this checkpoint behind must never silently inherit -- and
+  // eventually save -- a stranger's half-finished trip.
+  if (!currentUserId || checkpoint.userId !== currentUserId) {
+    Trip.clearCheckpoint();
+    return;
+  }
+
+  if (trip.isRecording) return; // shouldn't happen at startup, but never clobber a live trip
+
+  trip.restoreFrom(checkpoint);
+  dashboardView.setTripButtonText("End Trip");
+  // Same mutual-exclusion invariant startTrip() maintains -- see its own
+  // comment -- now applying to a trip that resumed rather than one a tap
+  // just started.
+  simulatedDrive.setEnabled(false);
+}
+
 export function startApp() {
   dashboardView.setStatus("searching for GPS…");
   dashboardView.setSpeed(0);
@@ -355,6 +439,13 @@ export function startApp() {
   dashboardView.setSpeedLimitSign(null);
   geoTracker.startWatching();
   geoTracker.requestWakeLock();
+  // Disabled for the brief async window resumeTripIfAny() needs to check
+  // for (and possibly restore) a leftover checkpoint -- closes a narrow
+  // race where a tap on Start Trip during that check could silently
+  // overwrite a still-loading resumed trip with a brand new one. A no-op
+  // startup with nothing to resume clears this again within a microtask.
+  dashboardView.setTripButtonDisabled(true);
+  resumeTripIfAny().finally(() => dashboardView.setTripButtonDisabled(false));
 }
 
 export function stopApp() {

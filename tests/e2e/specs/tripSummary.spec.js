@@ -32,7 +32,7 @@ async function completeAMovingTrip(page) {
   // Wait for the async Supabase save to actually finish, not just the
   // summary screen to appear -- otherwise the screenshot can catch a
   // transient "Saving…" state instead of the real final numbers.
-  await expect(page.locator("#trip-summary-save-status")).toHaveText(/Trip saved\.|Save failed/, {
+  await expect(page.locator("#trip-summary-save-status-text")).toHaveText(/Trip saved\.|Save failed/, {
     timeout: 10000,
   });
 }
@@ -72,3 +72,41 @@ for (const theme of THEMES) {
     });
   }
 }
+
+// Retry button (2026-08-11, council review Tier 7) -- a failed save
+// previously had no way back; the trip's data sat in memory and was
+// silently discarded the moment the summary screen was dismissed. Mocks the
+// first insert attempt as a failure, lets a real second attempt (the
+// driver's Retry click) through to the real Supabase backend.
+test("failed trip save shows Retry, which resends the same trip successfully", async ({ page }) => {
+  let insertAttempts = 0;
+  await page.route("**/rest/v1/trips*", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    insertAttempts += 1;
+    if (insertAttempts === 1) {
+      return route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ message: "mocked failure" }),
+      });
+    }
+    return route.fallback();
+  });
+
+  await page.goto("/");
+  await expect(page.locator("#app")).toBeVisible();
+  await completeAStationaryTrip(page);
+
+  await expect(page.locator("#trip-summary-save-status-text")).toHaveText("Save failed — try again.");
+  const retryBtn = page.locator("#trip-summary-save-retry");
+  await expect(retryBtn).toBeVisible();
+  await captureScreenshot(page, "trip_summary_save_failed_retry");
+
+  await retryBtn.click();
+
+  await expect(page.locator("#trip-summary-save-status-text")).toHaveText("Trip saved.", { timeout: 10000 });
+  await expect(retryBtn).toBeHidden();
+  expect(insertAttempts).toBe(2);
+
+  await page.click("#trip-summary-dismiss");
+});

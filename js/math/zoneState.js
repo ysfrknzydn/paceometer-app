@@ -21,7 +21,18 @@ export const SPEED_LIMIT_HYSTERESIS_MPH = 2;
 export const ZONE_STATE_LABELS = {
   green: "TIME ADDS UP HERE",
   yellow: "GAINS ARE SHRINKING",
-  red: "NO TIME LEFT TO GAIN",
+  // "TIME NOT WORTH CHASING" (changed 2026-08-11, council review --
+  // docs/TODO.md Tier 7): the old "NO TIME LEFT TO GAIN" claimed zero, but
+  // the number shown right underneath it in this state is the same
+  // marginalSecondsSaved value every zone state shows -- real and nonzero
+  // here, just below the threshold that makes it worth speeding for (e.g.
+  // "1:04" is a completely normal red-state reading). The label contradicted
+  // the number sitting next to it. First replacement candidate the user
+  // picked, "NOT WORTH CHASING", was itself flagged by a copy-reviewer pass
+  // as the one zone label with no noun ("chasing" what?), unlike every
+  // sibling label naming its own subject (TIME/GAINS/the limit) -- fixed by
+  // restoring the referent, same "TIME" as green's own label.
+  red: "TIME NOT WORTH CHASING",
   limit: "AT THE SPEED LIMIT",
 };
 

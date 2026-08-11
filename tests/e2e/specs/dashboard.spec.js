@@ -96,7 +96,7 @@ test("manual gas/brake dev tool ramps simulated speed up and down", async ({ pag
   await page.click("#simulate-btn"); // stop
   await expect(page.locator("#simulate-manual-controls")).toBeHidden();
   await expect(page.locator("#trip-summary")).toBeVisible();
-  await expect(page.locator("#trip-summary-save-status")).toHaveText("Simulated trip — not saved.");
+  await expect(page.locator("#trip-summary-save-status-text")).toHaveText("Simulated trip — not saved.");
 });
 
 test("simulated drive shows its own trip summary, never saved to Supabase", async ({ page }) => {
@@ -120,7 +120,7 @@ test("simulated drive shows its own trip summary, never saved to Supabase", asyn
   await page.click("#simulate-btn"); // stop mid-drive, not waiting for the profile to finish on its own
 
   await expect(page.locator("#trip-summary")).toBeVisible();
-  await expect(page.locator("#trip-summary-save-status")).toHaveText("Simulated trip — not saved.");
+  await expect(page.locator("#trip-summary-save-status-text")).toHaveText("Simulated trip — not saved.");
   expect(tripInserts).toHaveLength(0);
   await captureScreenshot(page, "dashboard_simulated_trip_summary");
 

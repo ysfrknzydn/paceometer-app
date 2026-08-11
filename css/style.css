@@ -673,6 +673,18 @@ html, body {
   min-height: 1.2em;
 }
 
+/* Retry button for a failed save (2026-08-11) -- inline with the status
+   text rather than stacked, same "error text + inline Retry" shape as
+   .vehicle-picker-error/.trips-error. No id-specificity fight to guard
+   against here (unlike those two): .trip-summary-save-status isn't a <p>
+   inside .settings-section, so there's no competing generic rule to lose
+   to. */
+.trip-summary-save-status .link-btn {
+  margin-top: 0;
+  margin-left: 0.3rem;
+  font-size: 0.85rem;
+}
+
 .trip-summary #trip-summary-dismiss {
   margin-top: 2rem;
 }

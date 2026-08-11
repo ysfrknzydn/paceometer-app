@@ -70,7 +70,7 @@ export default defineConfig({
       // specs/auth.setup.js) instead of every spec paying for its own
       // network round trip.
       name: "signed-in",
-      testMatch: /(dashboard|tripSummary|tripHistory|settings|locationDenied|vehiclePickerError|units|feedback)\.spec\.js/,
+      testMatch: /(dashboard|tripSummary|tripHistory|tripCheckpoint|settings|locationDenied|vehiclePickerError|units|feedback)\.spec\.js/,
       use: { ...devices["Desktop Chrome"], storageState: authStatePath },
       dependencies: ["setup"],
     },

@@ -149,7 +149,14 @@ export class SimulatedDrive {
     this._trip = trip;
     this._setActiveTrip = setActiveTrip;
     this._onDemoTripFinished = onDemoTripFinished;
-    this._demoTrip = new Trip();
+    // checkpointing: false (2026-08-11) -- a demo trip is never saved to
+    // Supabase and mutual exclusion means it can never run alongside a real
+    // one, but it would otherwise still write its fake accumulator state
+    // into the real Trip's localStorage checkpoint key while running. If
+    // the app crashed mid-demo, the next real load would try to "resume"
+    // fabricated simulated driving data as if it were a real trip -- see
+    // Trip's own constructor comment.
+    this._demoTrip = new Trip({ checkpointing: false });
     this._interval = null;
 
     this._toggleBtn = document.getElementById("simulate-toggle");

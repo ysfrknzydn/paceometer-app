@@ -6,17 +6,53 @@
 import { paceSecondsFor } from "../math/paceMath.js";
 import { gallonsPerMile } from "../math/fuelMath.js";
 
+// In-progress-trip checkpoint (2026-08-11, council review -- docs/TODO.md
+// Tier 7): a page reload, the phone killing a backgrounded tab, or a crash
+// mid-drive previously lost the whole trip with zero recovery, since every
+// accumulator field above only ever lived in memory. Mirrored to
+// localStorage on every recordSample() (and at start()), so a fresh page
+// load can resume an interrupted trip instead of silently discarding it --
+// only the same derived scalar accumulators this class already holds, no
+// raw lat/lng, same privacy invariant as everything else this app persists.
+const TRIP_CHECKPOINT_KEY = "paceometer-in-progress-trip";
+
+// How stale a leftover checkpoint can be and still be worth resuming.
+// Generous for a real drive interrupted by a genuine crash (the driver
+// typically reopens within minutes), but short enough that a truly
+// abandoned trip -- the app not reopened again until the next day, say --
+// doesn't get silently resumed hours later against a meaningless elapsed
+// time. Not literature-derived, a project design choice like
+// ZONE_THRESHOLD_PRESETS.
+const MAX_RESUMABLE_TRIP_GAP_MS = 3 * 60 * 60 * 1000; // 3 hours
+
 export class Trip {
-  constructor() {
+  // checkpointing defaults to true for the real, Start-Trip-button-owned
+  // Trip instance. SimulatedDrive's own separate demo-trip instance passes
+  // false: a demo trip is never saved to Supabase and mutual exclusion
+  // means it can never run at the same time as a real one, but it would
+  // otherwise still write ITS fake accumulator state into the same
+  // TRIP_CHECKPOINT_KEY while running -- if the app crashed mid-demo, the
+  // next real load would try to "resume" fabricated simulated driving data
+  // as if it were a real trip. Worse than the bug this feature fixes.
+  constructor({ checkpointing = true } = {}) {
     this._recording = false;
     this._trip = null;
+    this._checkpointing = checkpointing;
+    this._userId = null;
   }
 
   get isRecording() {
     return this._recording;
   }
 
-  start() {
+  // userId (2026-08-11) scopes the checkpoint to whoever's actually
+  // recording -- app.js passes the signed-in driver's id, read fresh at
+  // start() rather than cached anywhere on this class, which stays
+  // Supabase-unaware otherwise. Lets a shared device's next resume check
+  // refuse to silently inherit a different person's half-finished trip,
+  // the same class of bug already found and fixed once for VehiclePicker's
+  // cached vehicle selection (2026-08-05, see docs/CLAUDE.md).
+  start(userId = null) {
     this._trip = {
       startedAt: new Date(),
       sampleCount: 0,
@@ -41,6 +77,8 @@ export class Trip {
       vehicleLabel: null,
     };
     this._recording = true;
+    this._userId = userId;
+    this._writeCheckpoint();
   }
 
   // Returns { pctInZoneSoFar, timeSavedBySpeedingSoFar } (the running
@@ -136,6 +174,8 @@ export class Trip {
         ? Math.max(0, trip.idealSecondsAtLimit - trip.limitTrackedSeconds)
         : null;
 
+    this._writeCheckpoint();
+
     return { pctInZoneSoFar, timeSavedBySpeedingSoFar };
   }
 
@@ -145,6 +185,7 @@ export class Trip {
     const finishedTrip = this._trip;
     this._recording = false;
     this._trip = null;
+    this._clearCheckpoint();
     if (!finishedTrip) return null;
 
     const pctInZone =
@@ -215,5 +256,89 @@ export class Trip {
   cancel() {
     this._recording = false;
     this._trip = null;
+    this._clearCheckpoint();
+  }
+
+  _writeCheckpoint() {
+    if (!this._checkpointing) return;
+    try {
+      localStorage.setItem(
+        TRIP_CHECKPOINT_KEY,
+        JSON.stringify({
+          userId: this._userId,
+          lastWrittenAt: Date.now(),
+          trip: { ...this._trip, startedAt: this._trip.startedAt.toISOString() },
+        })
+      );
+    } catch {
+      // localStorage can throw (private browsing quota, disabled storage) --
+      // the checkpoint is a best-effort resilience layer on top of the
+      // in-memory recording, not something recording itself depends on.
+    }
+  }
+
+  _clearCheckpoint() {
+    if (!this._checkpointing) return;
+    try {
+      localStorage.removeItem(TRIP_CHECKPOINT_KEY);
+    } catch {
+      // See _writeCheckpoint()'s comment.
+    }
+  }
+
+  // Reads a leftover checkpoint without mutating any Trip instance or
+  // deciding whether to actually resume it -- app.js checks identity
+  // (does this belong to the currently signed-in driver?) before calling
+  // restoreFrom() below, which this static helper deliberately doesn't do
+  // itself, keeping this class Supabase/user-concept-unaware.
+  static readCheckpoint() {
+    let raw;
+    try {
+      raw = localStorage.getItem(TRIP_CHECKPOINT_KEY);
+    } catch {
+      return null;
+    }
+    if (!raw) return null;
+
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+
+    if (!parsed?.trip || Date.now() - parsed.lastWrittenAt > MAX_RESUMABLE_TRIP_GAP_MS) {
+      return null;
+    }
+    return parsed;
+  }
+
+  static clearCheckpoint() {
+    try {
+      localStorage.removeItem(TRIP_CHECKPOINT_KEY);
+    } catch {
+      // See _writeCheckpoint()'s comment.
+    }
+  }
+
+  // Restores this instance's state from a checkpoint already validated by
+  // the caller (identity + staleness -- see readCheckpoint() and app.js's
+  // resumeTripIfAny()). lastSampleTimestamp is deliberately reset to null
+  // rather than carried over: recordSample()'s distance/zone-time
+  // integration measures the gap since the *previous recorded* sample, and
+  // resuming after any real gap -- a few seconds for a quick reload, hours
+  // for the app left closed overnight -- would otherwise integrate mph
+  // against that entire gap as if the driver held that speed the whole
+  // time. Reusing the same "first sample of a trip skips integration" path
+  // every genuine first sample already takes, rather than special-casing a
+  // resumed one.
+  restoreFrom(checkpoint) {
+    this._trip = {
+      ...checkpoint.trip,
+      startedAt: new Date(checkpoint.trip.startedAt),
+      lastSampleTimestamp: null,
+    };
+    this._recording = true;
+    this._userId = checkpoint.userId;
   }
 }

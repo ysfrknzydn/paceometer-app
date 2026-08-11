@@ -20,7 +20,11 @@ export async function saveTrip(summary) {
   const { error } = await supabase.from("trips").insert({
     user_id: user.id,
     started_at: summary.startedAt.toISOString(),
-    ended_at: new Date().toISOString(),
+    // Stamped once by app.js's endTrip() at the moment the trip actually
+    // ended (2026-08-11) -- previously computed fresh on every call here,
+    // which meant a driver retrying a failed save minutes later would save
+    // a wrong, drifted ended_at on each attempt.
+    ended_at: summary.endedAt.toISOString(),
     avg_speed_mph: summary.avgSpeedMph,
     max_speed_mph: summary.maxSpeedMph,
     min_speed_mph: summary.minSpeedMph,

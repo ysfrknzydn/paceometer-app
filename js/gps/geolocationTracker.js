@@ -25,6 +25,27 @@ export class GeolocationTracker {
         this.requestWakeLock();
       }
     });
+
+    // Real-drive testing (2026-08-11) found the screen still falls asleep
+    // even with the lock request in startApp() -- most likely Safari/
+    // WebKit's own Screen Wake Lock implementation requiring the request to
+    // happen inside a real user gesture (unlike Chrome, which doesn't
+    // require one), the same class of browser restriction AudioFeedback
+    // already works around for AudioContext (see that file's own comment).
+    // startApp()'s call has no such gesture on the common "just reopened
+    // the already-installed PWA" path (a restored session -- zero taps on
+    // the page yet) and is borderline even for a fresh sign-in (fires after
+    // an async Supabase round trip, outside the click handler's own
+    // window). Retrying on every real tap while tracking is active gives
+    // every browser at least one unambiguously gesture-backed attempt, and
+    // also recovers a lock the browser silently dropped (see the "release"
+    // listener in requestWakeLock() below for why that can otherwise get
+    // permanently stuck unrecovered).
+    document.addEventListener("pointerdown", () => {
+      if (this._watchId !== null && this._wakeLock === null) {
+        this.requestWakeLock();
+      }
+    });
   }
 
   startWatching() {
@@ -66,13 +87,33 @@ export class GeolocationTracker {
   }
 
   async requestWakeLock() {
-    if (!("wakeLock" in navigator)) return;
+    if (!("wakeLock" in navigator) || document.visibilityState !== "visible") return;
     try {
       this._wakeLock = await navigator.wakeLock.request("screen");
-    } catch {
-      // Request can legitimately fail (e.g. low battery on some platforms)
-      // -- the app still works, it just falls back to the OS's normal
-      // screen timeout.
+      // The browser can release the lock out from under us at any time --
+      // tab backgrounded, real screen lock, low battery on some platforms
+      // -- without us calling releaseWakeLock() ourselves. Without this
+      // listener, _wakeLock stays a stale reference to an already-released
+      // sentinel, and the visibilitychange/pointerdown re-request guards
+      // above (both check `this._wakeLock === null`) would wrongly think a
+      // lock is still held and never try again for the rest of the
+      // session -- a real bug found 2026-08-11 alongside the gesture-
+      // requirement one above, and just as capable on its own of
+      // permanently leaving the screen free to sleep after the first
+      // silent auto-release.
+      this._wakeLock.addEventListener("release", () => {
+        this._wakeLock = null;
+      });
+    } catch (error) {
+      // Request can legitimately fail (e.g. low battery on some platforms,
+      // or no qualifying user gesture on Safari -- see the pointerdown
+      // listener above) -- the app still works, it just falls back to the
+      // OS's normal screen timeout. Logged rather than silently swallowed
+      // (2026-08-11) so a real failure is actually visible via remote
+      // debugging (Safari Web Inspector / chrome://inspect) during live
+      // testing, instead of this exact "still doesn't work" bug being
+      // undiagnosable a second time.
+      console.warn("Screen Wake Lock request failed:", error);
       this._wakeLock = null;
     }
   }

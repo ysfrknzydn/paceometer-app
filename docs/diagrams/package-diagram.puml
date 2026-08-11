@@ -83,6 +83,7 @@ appjs --> geoTracker
 appjs --> sls
 appjs --> tripClass
 appjs --> tripsApi
+appjs --> supa
 appjs --> dashboardView
 appjs --> segmentedSetting
 appjs --> vehiclePicker

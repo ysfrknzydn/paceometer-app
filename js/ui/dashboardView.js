@@ -41,7 +41,7 @@ const VIEWPORT_ZOOM_DISABLED =
   "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover";
 
 export class DashboardView {
-  constructor({ onTripButtonClick, onTripSummaryDismiss, onTripsOpen }) {
+  constructor({ onTripButtonClick, onTripSummaryDismiss, onTripSummarySaveRetry, onTripsOpen }) {
     this._unitSystem = "imperial";
 
     this._statusEl = document.getElementById("status");
@@ -69,6 +69,8 @@ export class DashboardView {
     this._tripSummaryGasCostEl = document.getElementById("trip-summary-gas-cost");
     this._tripSummaryGasSavedEl = document.getElementById("trip-summary-gas-saved");
     this._tripSummarySaveStatusEl = document.getElementById("trip-summary-save-status");
+    this._tripSummarySaveStatusTextEl = document.getElementById("trip-summary-save-status-text");
+    this._tripSummarySaveRetryBtn = document.getElementById("trip-summary-save-retry");
     this._tripSummaryDismissBtn = document.getElementById("trip-summary-dismiss");
     this._locationDeniedEl = document.getElementById("location-denied");
     this._locationDeniedReloadBtn = document.getElementById("location-denied-reload");
@@ -85,6 +87,7 @@ export class DashboardView {
 
     this._tripBtn.addEventListener("click", onTripButtonClick);
     this._tripSummaryDismissBtn.addEventListener("click", onTripSummaryDismiss);
+    this._tripSummarySaveRetryBtn.addEventListener("click", onTripSummarySaveRetry);
     // A real reload, not an in-place watchPosition retry -- see
     // showLocationDenied()'s comment for why.
     this._locationDeniedReloadBtn.addEventListener("click", () => location.reload());
@@ -286,8 +289,14 @@ export class DashboardView {
     this._tripStatusEl.textContent = text;
   }
 
-  setTripSummarySaveStatus(text) {
-    this._tripSummarySaveStatusEl.textContent = text;
+  // retryable shows the Retry button (2026-08-11, council review Tier 7 --
+  // a failed save previously had no way back, so the trip's data was
+  // silently discarded the moment the summary screen was dismissed).
+  // app.js decides *whether* a save is retryable (it owns the pending
+  // summary a retry click resends); this stays a "dumb" toggle.
+  setTripSummarySaveStatus(text, { retryable = false } = {}) {
+    this._tripSummarySaveStatusTextEl.textContent = text;
+    this._tripSummarySaveRetryBtn.classList.toggle("hidden", !retryable);
   }
 
   // Accessory Feature: the end-of-trip summary. Deliberately just the one
