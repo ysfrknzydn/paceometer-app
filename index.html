@@ -83,7 +83,7 @@
          alongside the sign-up form rather than only living in Settings ->
          Privacy post-signup, so a new driver has a plain-language answer to
          "why does this want my location" before they've committed to an
-         account. Deliberately short (see docs/CLAUDE.md) -- the real Privacy
+         account. Deliberately short -- the real Privacy
          Policy/ToS is a separate, later item, not this. Toggled by
          AuthController's _setMode() alongside #auth-form itself. -->
     <div id="signup-explainer" class="signup-explainer hidden">
@@ -263,8 +263,8 @@
       <!-- Dev tool for testing indoors without driving. Remove this whole
            block (toggle + dropdown + button + progress bar + the manual
            gas/brake controls below) along with js/dev/simulatedDrive.js and
-           its one import line in js/app.js before shipping to real study
-           participants -- see CLAUDE.md pre-launch checklist. Collapsed
+           its one import line in js/app.js before shipping to real users
+           -- see the pre-launch checklist in docs/TODO.md. Collapsed
            behind a disclosure toggle by default (2026-07-16) so it doesn't
            visually compete with the live readout during a normal demo. -->
       <button id="simulate-toggle" class="simulate-toggle link-btn" type="button">Dev tools &#9656;</button>
@@ -355,7 +355,7 @@
         </h2>
         <p>Instead of just showing your speed, Paceometer shows how much time speeding up would actually save you, plus a color so you can tell at a glance whether it's worth it — and where the posted speed limit is known, the app never suggests going faster than what's legal, no matter what the time math alone would say.</p>
         <p><strong>The pace number</strong> (minutes to cover 10 miles at your current speed) is based on a real published study (Peer &amp; Gamliel, 2013), which found that showing drivers this number instead of just mph made them much better at judging how much time speeding up would actually save.</p>
-        <p><strong>The color indicator:</strong> it reflects how much time going 10mph faster would actually save — one color means that gain is still meaningful, another means it's shrinking, another means there's basically nothing left to gain. A fourth, distinct color takes priority over all of that whenever you're at or above a posted speed limit the app knows about. How big a time savings counts as "meaningful" is adjustable in Settings under Zone Sensitivity — none of these specific cutoffs are from a published study; they're this app's own design choice (informed by the research team's guidance), chosen to land on clean, round numbers within the same math as the pace formula above.</p>
+        <p><strong>The color indicator:</strong> it reflects how much time going 10mph faster would actually save — one color means that gain is still meaningful, another means it's shrinking, another means there's basically nothing left to gain. A fourth, distinct color takes priority over all of that whenever you're at or above a posted speed limit the app knows about. How big a time savings counts as "meaningful" is adjustable in Settings under Zone Sensitivity — none of these specific cutoffs are from a published study; they're this app's own design choice, chosen to land on clean, round numbers within the same math as the pace formula above.</p>
         <p><strong>The end-of-trip number</strong> is how much time you actually gained by driving faster than the posted speed limit, counted only over the parts of the trip where a limit was known. A small number is the good sign here — it means speeding barely bought you anything.</p>
         <p>When it's available, this app looks up the posted speed limit near you (from OpenStreetMap) so it never tells you to go faster than what's legal. That data isn't always complete, and how safe a specific road actually is is still something this app doesn't know — a known limit changes the color, but it's never a promise that a road is safe to drive at that speed.</p>
       </section>
@@ -394,12 +394,11 @@
       </section>
 
       <!-- Units (2026-08-07): a personal display preference, same family as
-           Appearance (light/dark) rather than a research-design choice like
+           Appearance (light/dark) rather than a methodology choice like
            Zone Sensitivity -- placed directly after Appearance for that
            reason. Display-only: every live number this app actually
            computes with stays mph/miles/gallons internally regardless of
-           this setting (js/math/unitsMath.js, DashboardView.setUnitSystem())
-           -- see docs/CLAUDE.md. -->
+           this setting (js/math/unitsMath.js, DashboardView.setUnitSystem()). -->
       <section class="settings-section settings-section--accent-2">
         <h2>
           <span class="settings-icon-chip settings-icon-chip--accent-2">
@@ -519,8 +518,8 @@
       <!-- Pagination (2026-08-19, council review Tier 7) -- load() used to
            fetch every trip in one unbounded query, hitting the same
            PostgREST 1000-row default cap that already silently truncated
-           the vehicle-picker's Make dropdown once in this codebase (see
-           docs/CLAUDE.md). Fetches TRIPS_PAGE_SIZE at a time instead; this
+           the vehicle-picker's Make dropdown once in this codebase.
+           Fetches TRIPS_PAGE_SIZE at a time instead; this
            button appears only once a full page comes back, i.e. there might
            be more. -->
       <button id="trips-load-more" class="link-btn trips-load-more hidden" type="button">Load more</button>
