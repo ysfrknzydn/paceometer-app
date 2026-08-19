@@ -2,7 +2,10 @@ name: Tests
 
 # Fast-feedback suite: the pure math mirrored in js/math/ and
 # python/paceometer_math/ (cross-checked against tests/golden_vectors/),
-# plus the fuel-data-pipeline's pure cleaning/filtering logic
+# js/trip/'s Trip class (2026-08-19, council review Tier 7 -- the class that
+# computes pct_time_in_zone/time_saved_by_speeding_seconds, previously
+# untested despite already shipping one silent sign-flip bug once), plus the
+# fuel-data-pipeline's pure cleaning/filtering logic
 # (python/tests/test_fuel_pipeline_clean.py). Deliberately separate from
 # .github/workflows/weekly-fuel-data-refresh.yml, which only runs on a
 # schedule -- this one runs on every push/PR so a broken formula is caught
@@ -26,13 +29,28 @@ jobs:
       - name: Run JS math tests
         run: node --test js/math/*.test.js
 
+      - name: Run Trip class tests
+        run: node --test js/trip/*.test.js
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.14"
 
+      # --require-hashes (2026-08-19, security audit finding 5.3): the
+      # exact-pinned requirements.txt had no hash verification, so a
+      # compromised PyPI release published under an already-pinned version
+      # number (or a MITM'd download) would install silently. requirements.
+      # lock.txt is pip-compile --generate-hashes output covering every
+      # transitive dependency too, not just the two direct ones -- see
+      # python/requirements.lock.txt's own header for how to regenerate it.
       - name: Install Python dependencies
-        run: pip install -r python/requirements.txt
+        run: pip install --require-hashes -r python/requirements.lock.txt
+
+      - name: Audit Python dependencies for known CVEs
+        run: |
+          pip install --quiet pip-audit
+          pip-audit -r python/requirements.txt
 
       - name: Run Python tests
         working-directory: python

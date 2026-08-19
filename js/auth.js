@@ -66,16 +66,26 @@ class AuthController {
     // Onboarding (2026-08-07): "Go to Settings" and "Skip for now" are
     // equally direct one-tap exits, deliberately not styled to make Skip
     // feel like the lesser option -- see _showOnboarding()'s own comment
-    // for when this screen shows at all.
+    // for when this screen shows at all. Routed through _setVisibleScreen()
+    // (2026-08-19, council review Tier 7) rather than each duplicating its
+    // own hide-everything-then-show-one class toggling -- these used to be
+    // the one place in this class that bypassed the centralized show/hide
+    // pattern docs/CLAUDE.md's Screen-gating pattern entry says to route
+    // through, a real (if harmless at the time) landmine for whoever next
+    // added logic to _showApp()/_showAuth() and expected it to be the only
+    // place these classes get toggled. Deliberately call _setVisibleScreen()
+    // directly rather than _showApp()/_showAuth() themselves -- those also
+    // call startApp()/stopApp(), and tracking is already running from
+    // _showOnboarding() a moment earlier; re-running startApp() here would
+    // flash the live display back to "searching for GPS…" and cold-start
+    // the zone-hysteresis tracker, the same class of bug the 2026-08-05
+    // token-refresh fix addressed elsewhere -- see _setVisibleScreen()'s own
+    // comment.
     this._onboardingSettingsBtn.addEventListener("click", () => {
-      this._onboardingScreen.classList.add("hidden");
-      this._settingsScreen.classList.remove("hidden");
-      setViewportZoomEnabled(true);
+      this._setVisibleScreen("settings");
     });
     this._onboardingSkipBtn.addEventListener("click", () => {
-      this._onboardingScreen.classList.add("hidden");
-      this._appScreen.classList.remove("hidden");
-      setViewportZoomEnabled(false);
+      this._setVisibleScreen("app");
     });
 
     // Only react to a genuine sign-in/sign-out transition, not every event
@@ -252,13 +262,36 @@ class AuthController {
     this._showApp();
   }
 
+  // The one place that knows the full set of five mutually-exclusive
+  // top-level screens (docs/CLAUDE.md's Screen-gating pattern) and toggles
+  // between them, plus the shared viewport-zoom setting that goes with each
+  // (zoom disabled only on the live dashboard -- see setViewportZoomEnabled's
+  // own callers). Shared by _showApp()/_showAuth()/_showOnboarding() below
+  // AND onboarding's own two exit buttons (2026-08-19, council review Tier
+  // 7 -- those used to duplicate this exact hide-everything-then-show-one
+  // class toggling directly in their own click listeners, a second place
+  // that had to be kept in sync with this one by hand).
+  //
+  // Deliberately does NOT call startApp()/stopApp() -- those stay each
+  // caller's own explicit decision. In particular, onboarding's exits call
+  // this directly rather than going through _showApp() itself: tracking is
+  // already running from _showOnboarding() a moment earlier, and _showApp()
+  // unconditionally calls startApp() again, which resets the live
+  // speed/pace/zone display to a cold "searching for GPS…" state and the
+  // zone-change hysteresis tracker along with it -- the same class of bug
+  // the 2026-08-05 token-refresh fix (see supabase.auth.onAuthStateChange
+  // above) closed for a different trigger.
+  _setVisibleScreen(screen) {
+    this._authScreen.classList.toggle("hidden", screen !== "auth");
+    this._onboardingScreen.classList.toggle("hidden", screen !== "onboarding");
+    this._appScreen.classList.toggle("hidden", screen !== "app");
+    this._settingsScreen.classList.toggle("hidden", screen !== "settings");
+    this._tripsScreen.classList.toggle("hidden", screen !== "trips");
+    setViewportZoomEnabled(screen !== "app");
+  }
+
   _showApp() {
-    this._authScreen.classList.add("hidden");
-    this._settingsScreen.classList.add("hidden");
-    this._tripsScreen.classList.add("hidden");
-    this._onboardingScreen.classList.add("hidden");
-    this._appScreen.classList.remove("hidden");
-    setViewportZoomEnabled(false);
+    this._setVisibleScreen("app");
     startApp();
   }
 
@@ -269,12 +302,7 @@ class AuthController {
   // regardless of which screen happens to be visible first, matching how
   // Settings itself never pauses live tracking underneath it.
   _showOnboarding() {
-    this._authScreen.classList.add("hidden");
-    this._settingsScreen.classList.add("hidden");
-    this._tripsScreen.classList.add("hidden");
-    this._appScreen.classList.add("hidden");
-    this._onboardingScreen.classList.remove("hidden");
-    setViewportZoomEnabled(true);
+    this._setVisibleScreen("onboarding");
     startApp();
   }
 
@@ -283,12 +311,7 @@ class AuthController {
   // recovery link lands on the set-new-password form instead.
   _showAuth(mode = "sign-in") {
     stopApp();
-    this._appScreen.classList.add("hidden");
-    this._settingsScreen.classList.add("hidden");
-    this._tripsScreen.classList.add("hidden");
-    this._onboardingScreen.classList.add("hidden");
-    this._authScreen.classList.remove("hidden");
-    setViewportZoomEnabled(true);
+    this._setVisibleScreen("auth");
     this._authForm.reset();
     this._resetConfirmForm.reset();
     // Bug fix 2026-08-05: mode wasn't reset here, so signing out mid-"sign

@@ -29,8 +29,10 @@ jobs:
         with:
           python-version: "3.14"
 
+      # --require-hashes (2026-08-19, security audit finding 5.3) -- see
+      # tests.yml's matching step for the full reasoning.
       - name: Install Python dependencies
-        run: pip install -r python/requirements.txt
+        run: pip install --require-hashes -r python/requirements.lock.txt
 
       - name: Run pipeline tests as a gate
         working-directory: python

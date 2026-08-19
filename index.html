@@ -516,8 +516,31 @@
         <button id="trips-retry" class="link-btn" type="button">Retry</button>
       </p>
       <div id="trips-list" class="trips-list"></div>
+      <!-- Pagination (2026-08-19, council review Tier 7) -- load() used to
+           fetch every trip in one unbounded query, hitting the same
+           PostgREST 1000-row default cap that already silently truncated
+           the vehicle-picker's Make dropdown once in this codebase (see
+           docs/CLAUDE.md). Fetches TRIPS_PAGE_SIZE at a time instead; this
+           button appears only once a full page comes back, i.e. there might
+           be more. -->
+      <button id="trips-load-more" class="link-btn trips-load-more hidden" type="button">Load more</button>
     </div>
   </main>
+
+  <!-- Global error banner (2026-08-19, council review Tier 7) -- an
+       uncaught exception anywhere used to just freeze whatever was on
+       screen silently, with nothing logged and nothing shown to the
+       driver. GlobalErrorHandler (js/errorReporting/globalErrorHandler.js)
+       listens for window "error"/"unhandledrejection" and calls
+       DashboardView.showGlobalError(), which toggles this. Fixed-position
+       and outside every .screen div deliberately, so it's visible
+       regardless of which screen is showing when the error fires -- unlike
+       #feedback-panel, this isn't scoped to the live dashboard only. Never
+       blocks input to whatever's underneath it. -->
+  <div id="global-error-banner" class="global-error-banner hidden" role="alert" aria-live="assertive">
+    <span id="global-error-banner-text" class="global-error-banner-text"></span>
+    <button id="global-error-banner-dismiss" class="link-btn global-error-banner-dismiss" type="button">Dismiss</button>
+  </div>
 
   <script type="module" src="js/auth.js"></script>
 </body>

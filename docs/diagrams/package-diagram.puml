@@ -62,6 +62,10 @@ package "js/dev  (deleted before shipping)" as devPkg #FDEDED {
   [SimulatedDrive] as simulatedDrive
 }
 
+package "js/errorReporting" as errPkg {
+  [GlobalErrorHandler] as globalErrorHandler
+}
+
 package "js/math  (pure functions, no classes)" as mathPkg #EAF3EA {
   [paceMath.js] as paceMath
   [zoneState.js] as zoneState
@@ -93,6 +97,8 @@ appjs --> simulatedDrive
 appjs --> tripHistory
 appjs --> feedbackRecorder
 feedbackRecorder ..> tripClass
+appjs --> globalErrorHandler
+globalErrorHandler ..> dashboardView
 appjs ..> paceMath
 appjs ..> zoneState
 

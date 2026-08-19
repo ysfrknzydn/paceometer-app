@@ -74,6 +74,9 @@ export class DashboardView {
     this._tripSummaryDismissBtn = document.getElementById("trip-summary-dismiss");
     this._locationDeniedEl = document.getElementById("location-denied");
     this._locationDeniedReloadBtn = document.getElementById("location-denied-reload");
+    this._globalErrorBannerEl = document.getElementById("global-error-banner");
+    this._globalErrorBannerTextEl = document.getElementById("global-error-banner-text");
+    this._globalErrorBannerDismissBtn = document.getElementById("global-error-banner-dismiss");
     this._appScreenEl = document.getElementById("app");
     this._settingsScreenEl = document.getElementById("settings-screen");
     this._settingsNavBtn = document.getElementById("settings-nav");
@@ -91,6 +94,7 @@ export class DashboardView {
     // A real reload, not an in-place watchPosition retry -- see
     // showLocationDenied()'s comment for why.
     this._locationDeniedReloadBtn.addEventListener("click", () => location.reload());
+    this._globalErrorBannerDismissBtn.addEventListener("click", () => this.hideGlobalError());
 
     // Settings is a real 4th screen (Surface Area Check, 2026-07-16),
     // toggled independently of the auth-screen/app-screen swap in auth.js --
@@ -154,6 +158,23 @@ export class DashboardView {
     this._tripControlsEl.classList.add("hidden");
     this._tripSummaryEl.classList.add("hidden");
     this._locationDeniedEl.classList.remove("hidden");
+  }
+
+  // Global error banner (2026-08-19, council review Tier 7). Unlike
+  // showLocationDenied() above, this deliberately never hides
+  // #readout/#trip-controls/anything else -- it's a non-blocking overlay
+  // (see its CSS/index.html comments), since an uncaught error might have
+  // nothing to do with what's currently on screen and hiding a working
+  // screen underneath it would make things worse, not better. Driven by
+  // GlobalErrorHandler (js/errorReporting/globalErrorHandler.js), wired
+  // from app.js's composition root.
+  showGlobalError(message) {
+    this._globalErrorBannerTextEl.textContent = message;
+    this._globalErrorBannerEl.classList.remove("hidden");
+  }
+
+  hideGlobalError() {
+    this._globalErrorBannerEl.classList.add("hidden");
   }
 
   // Metric/imperial (2026-08-07): a display-only preference -- every value
@@ -312,8 +333,14 @@ export class DashboardView {
     this._tripSummaryEl.classList.remove("hidden");
 
     if (timeSavedBySpeedingSeconds === null) {
-      this._tripSummaryValueEl.textContent = "--";
-      this._tripSummaryCaptionEl.textContent = "no speed limit data this trip";
+      // A literal "--" in the 5rem numeric font (2026-08-11, council review
+      // Tier 7) rendered as a solid dash/bar -- indistinguishable from a
+      // broken or unrendered element, not a legible "no data" message. Swap
+      // to a real sentence, sized down via the --empty modifier so it still
+      // fits the headline slot without looking like a giant typo.
+      this._tripSummaryValueEl.textContent = "No speed limit data for this trip";
+      this._tripSummaryValueEl.classList.add("trip-summary-value--empty");
+      this._tripSummaryCaptionEl.textContent = "";
     } else {
       // "only" prefix styled as a smaller span (not jammed into the 5rem
       // numeric font) so it still reads as a qualifier on the number, not
@@ -324,6 +351,7 @@ export class DashboardView {
       // innerHTML anywhere)" as a real security property (see docs/TODO.md
       // 2026-07-16 security audit), and that claim was quietly false the
       // moment this line existed.
+      this._tripSummaryValueEl.classList.remove("trip-summary-value--empty");
       this._tripSummaryValueEl.textContent = "";
       const prefixEl = document.createElement("span");
       prefixEl.className = "trip-summary-value-prefix";

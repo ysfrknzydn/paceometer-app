@@ -251,6 +251,11 @@ export class SimulatedDrive {
     // Optional dev-only override so the "limit" zone state (and its
     // colors/chime/haptic/trip-summary reframing) can be exercised without
     // a real drive -- skips the real Overpass call entirely while set.
+    // suppressRealQuery() (2026-08-19, council review Tier 7) is separate
+    // and unconditional -- a simulated drive's fixed (0,0) coordinates
+    // should never reach the real Overpass endpoint at all, override or
+    // not; see that method's own comment for the bug this closes.
+    this._speedLimitService.suppressRealQuery();
     const parsedLimit = parseFloat(this._speedLimitEl.value);
     const overrideMph = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : null;
     if (overrideMph !== null) {
@@ -334,6 +339,7 @@ export class SimulatedDrive {
     this._brakeHeld = false;
     this._geoTracker.resetLastPosition();
     this._speedLimitService.clearDevOverride();
+    this._speedLimitService.allowRealQuery();
     this._speedLimitService.resetKnownLimit();
     this._dashboardView.setSpeedLimitSign(null);
     this._profileEl.disabled = false;

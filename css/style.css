@@ -609,6 +609,19 @@ html, body {
   color: var(--text-primary);
 }
 
+/* No-speed-limit-data state (2026-08-11, council review Tier 7) -- a plain
+   "--" at the full 5rem numeric size rendered as a solid dash/bar that read
+   as broken UI. This modifier swaps in a legible sentence, sized and
+   weighted down so it reads as an intentional message, not a giant typo. */
+.trip-summary-value--empty {
+  font-family: var(--font-body);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  max-width: 280px;
+  text-align: center;
+}
+
 /* Qualifier on the trip-summary number ("only 15s") -- deliberately much
    smaller than the 5rem number it precedes, so it reads as a caveat on the
    number rather than part of it. See showTripSummary's comment in app.js:
@@ -926,6 +939,46 @@ html, body {
   margin-top: 0;
   font-size: 0.85rem;
   white-space: nowrap;
+}
+
+/* Global error banner (2026-08-19, council review Tier 7) -- an uncaught
+   exception used to just freeze whatever was on screen silently. Unlike
+   #feedback-panel above (scoped to the live dashboard, position: absolute
+   inside #app), this needs to be visible no matter which .screen is
+   showing when the error fires, so it's position: fixed against the
+   viewport and sits outside every .screen div in index.html. Deliberately
+   never covers the whole screen or blocks input to whatever's underneath
+   -- a frozen display is bad enough without also losing access to
+   whatever's still working (e.g. the trip button). Red-tinted per this
+   file's existing error-text convention (#vehicle-picker-error/#trips-error
+   below), not the neutral --surface #feedback-panel uses, since this one
+   really is reporting a fault, not a status update. */
+.global-error-banner {
+  position: fixed;
+  left: 50%;
+  bottom: max(env(safe-area-inset-bottom), 16px);
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  width: calc(100% - 2rem);
+  max-width: 340px;
+  padding: 0.7rem 1rem;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid #991b1b;
+  font-size: 0.85rem;
+  color: #f87171;
+}
+
+.global-error-banner-dismiss {
+  align-self: flex-end;
+  margin-top: 0;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  color: var(--text-primary);
 }
 
 /* Always-on speed limit sign (2026-07-26) -- mirrors the settings-nav gear's
@@ -1338,6 +1391,14 @@ html, body {
   gap: 0.75rem;
 }
 
+/* Pagination (2026-08-19, council review Tier 7) -- see tripHistory.js's
+   TRIPS_PAGE_SIZE comment. Plain centered link-style button, consistent
+   with every other "Retry"/"Back" control on this screen. */
+.trips-load-more {
+  display: block;
+  margin: 1rem auto 0;
+}
+
 .trip-history-card {
   position: relative;
   padding: 0.9rem 1rem;
@@ -1445,6 +1506,29 @@ html, body {
   .trip-summary-value {
     font-size: 3rem;
     margin-top: 0.3rem;
+  }
+
+  .trip-summary-value--empty {
+    font-size: 1.1rem;
+    max-width: 200px;
+  }
+
+  /* The portrait layout's stacked text-then-Dismiss shape is too tall for
+     landscape's much shorter viewport -- verified via a real screenshot
+     that it visibly overlapped the auth screen's submit button otherwise.
+     Back to a single compact row, smaller text, tighter padding. */
+  .global-error-banner {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.6rem;
+    max-width: min(420px, calc(100% - 2rem));
+    padding: 0.4rem 0.8rem;
+    font-size: 0.75rem;
+  }
+
+  .global-error-banner-dismiss {
+    align-self: center;
+    font-size: 0.75rem;
   }
 
   .trip-summary-caption {
@@ -1596,6 +1680,7 @@ html, body {
   #vehicle-picker-error { color: #991b1b; }
   #trips-error { color: #991b1b; }
   .trip-history-delete--armed { color: #991b1b; }
+  .global-error-banner { color: #991b1b; }
 }
 
 :root[data-theme="light"] {
@@ -1646,6 +1731,7 @@ html, body {
 :root[data-theme="light"] #vehicle-picker-error { color: #991b1b; }
 :root[data-theme="light"] #trips-error { color: #991b1b; }
 :root[data-theme="light"] .trip-history-delete--armed { color: #991b1b; }
+:root[data-theme="light"] .global-error-banner { color: #991b1b; }
 
 /* Explicit "Dark" needs to restate the plain dark defaults so it can win
    even when the system/browser preference is light -- the @media block

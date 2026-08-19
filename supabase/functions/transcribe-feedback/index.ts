@@ -68,6 +68,44 @@ const ALLOWED_AUDIO_TYPES = new Set([
   "audio/mpeg",
 ]);
 
+// Content sniffing (2026-08-19, security audit finding 8.1): the ALLOWED_
+// AUDIO_TYPES check above only validates the *declared* Blob.type -- a
+// crafted multipart request can claim any Content-Type for any bytes, since
+// that field is just a string the client sets, not something the browser
+// verifies against the actual file content. Real-world severity here was
+// always low (this endpoint is already authenticated, rate-limited, and
+// never persists the file -- Groq validates it independently too), but
+// checking actual magic bytes before spending an API call on Groq is a
+// standard, cheap defense-in-depth layer. Signatures cover exactly the
+// containers ALLOWED_AUDIO_TYPES allows, nothing broader.
+function sniffsAsAudio(bytes: Uint8Array): boolean {
+  if (bytes.length < 12) return false;
+
+  // WebM/Matroska: EBML header.
+  if (bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) return true;
+
+  // Ogg: "OggS".
+  if (bytes[0] === 0x4f && bytes[1] === 0x67 && bytes[2] === 0x67 && bytes[3] === 0x53) return true;
+
+  // MP4/M4A (ISO base media file format): a 4-byte box size, then "ftyp".
+  if (bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) return true;
+
+  // WAV: "RIFF" .... "WAVE".
+  if (
+    bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+    bytes[8] === 0x57 && bytes[9] === 0x41 && bytes[10] === 0x56 && bytes[11] === 0x45
+  ) {
+    return true;
+  }
+
+  // MP3: either an ID3v2 tag ("ID3") or a raw MPEG frame sync (11 set bits:
+  // 0xFF followed by a byte with its top 3 bits set).
+  if (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) return true;
+  if (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0) return true;
+
+  return false;
+}
+
 // Per-user, per-hour cap on feedback submissions -- generous for a real
 // bug-report/feedback use case (nobody legitimately submits 10+ in an
 // hour), tight enough to bound how much of Groq's shared daily quota one
@@ -113,6 +151,12 @@ Deno.serve(async (req) => {
   }
   const audioType = audioFile.type.split(";")[0].trim().toLowerCase();
   if (!ALLOWED_AUDIO_TYPES.has(audioType)) {
+    return errorResponse("Unsupported file type", 400);
+  }
+  // Real content check, not just the declared type above -- see
+  // sniffsAsAudio()'s own comment.
+  const headerBytes = new Uint8Array(await audioFile.slice(0, 12).arrayBuffer());
+  if (!sniffsAsAudio(headerBytes)) {
     return errorResponse("Unsupported file type", 400);
   }
 

@@ -17,6 +17,15 @@ import { supabase } from "../supabaseClient.js";
 import { formatDuration } from "../math/paceMath.js";
 import { mphToKmh, milesToKm } from "../math/unitsMath.js";
 
+// Pagination (2026-08-19, council review Tier 7): load() previously fetched
+// every one of the signed-in driver's trips in one unbounded query, which
+// would silently hit PostgREST's default 1000-row response cap for a
+// long-time user -- the exact same landmine that already broke the
+// vehicle-picker's Make dropdown once in this codebase (see docs/CLAUDE.md's
+// 2026-08-03 entry). 25 keeps each fetch small and each page's worth of
+// cards a reasonable single scroll, well under the cap either way.
+const TRIPS_PAGE_SIZE = 25;
+
 export class TripHistory {
   // getGasPricePerGallon/getUnitSystem: callbacks, not constructor values,
   // since app.js owns both settings and either can change between visits to
@@ -34,14 +43,28 @@ export class TripHistory {
     this._emptyEl = document.getElementById("trips-empty");
     this._errorEl = document.getElementById("trips-error");
     this._retryBtn = document.getElementById("trips-retry");
+    this._loadMoreBtn = document.getElementById("trips-load-more");
+    this._offset = 0;
 
     this._retryBtn.addEventListener("click", () => this.load());
+    this._loadMoreBtn.addEventListener("click", () => this._fetchPage());
   }
 
   async load() {
     this._errorEl.classList.add("hidden");
     this._emptyEl.classList.add("hidden");
+    this._loadMoreBtn.classList.add("hidden");
+    this._loadMoreBtn.textContent = "Load more";
     this._listEl.replaceChildren();
+    this._offset = 0;
+    await this._fetchPage();
+  }
+
+  // Fetches one TRIPS_PAGE_SIZE-row page starting at this._offset and
+  // appends it -- called by both load() (starting fresh, offset 0) and the
+  // "Load more" button (continuing from wherever the last page left off).
+  async _fetchPage() {
+    this._loadMoreBtn.disabled = true;
 
     const { data, error } = await supabase
       .from("trips")
@@ -51,14 +74,26 @@ export class TripHistory {
       // RLS already scopes this to the signed-in user's own rows -- no
       // explicit .eq("user_id", ...) needed, same as every other trips read.
       .eq("removed_from_ui", false)
-      .order("started_at", { ascending: false });
+      .order("started_at", { ascending: false })
+      .range(this._offset, this._offset + TRIPS_PAGE_SIZE - 1);
+
+    this._loadMoreBtn.disabled = false;
 
     if (error) {
-      this._errorEl.classList.remove("hidden");
+      // A first-page failure gets the full-screen #trips-error state (same
+      // as before); a "Load more" failure leaves the already-rendered cards
+      // alone and just lets the button itself be retried, so one flaky page
+      // fetch doesn't wipe trips that already loaded successfully.
+      if (this._offset === 0) {
+        this._errorEl.classList.remove("hidden");
+      } else {
+        this._loadMoreBtn.textContent = "Couldn't load more — retry?";
+        this._loadMoreBtn.classList.remove("hidden");
+      }
       return;
     }
 
-    if (data.length === 0) {
+    if (this._offset === 0 && data.length === 0) {
       this._emptyEl.classList.remove("hidden");
       return;
     }
@@ -66,6 +101,13 @@ export class TripHistory {
     for (const trip of data) {
       this._listEl.append(this._buildCard(trip));
     }
+
+    this._offset += data.length;
+    // A page that came back short of TRIPS_PAGE_SIZE is the last one --
+    // nothing more to fetch, so the button disappears rather than offering
+    // a "Load more" that would just return an empty page.
+    this._loadMoreBtn.textContent = "Load more";
+    this._loadMoreBtn.classList.toggle("hidden", data.length < TRIPS_PAGE_SIZE);
   }
 
   _buildCard(trip) {

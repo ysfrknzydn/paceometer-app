@@ -95,6 +95,52 @@ for (const theme of THEMES) {
   });
 }
 
+// Pagination (2026-08-19, council review Tier 7) -- load() previously
+// fetched every trip in one unbounded query, which would silently hit
+// PostgREST's default 1000-row cap for a long-time user (the same landmine
+// that already broke the vehicle-picker's Make dropdown once, see
+// docs/CLAUDE.md). supabase-js's .range() sends plain offset/limit query
+// params (confirmed by actually inspecting a real request, not assumed),
+// so the mock below serves pages from those instead of a Range header.
+test("trips list fetches in pages and shows Load More only when a full page comes back", async ({ page }) => {
+  const allTrips = Array.from({ length: 30 }, (_, i) => ({
+    id: `33333333-3333-3333-3333-${String(i).padStart(12, "0")}`,
+    started_at: new Date(Date.UTC(2026, 0, 30 - i)).toISOString(),
+    distance_miles: 5,
+    avg_speed_mph: 30,
+    time_saved_by_speeding_seconds: null,
+    gallons_used: null,
+    vehicle_label: null,
+  }));
+
+  await page.route("**/rest/v1/trips*", (route) => {
+    const request = route.request();
+    if (request.method() !== "GET") return route.fallback();
+    const url = new URL(request.url());
+    const offset = Number(url.searchParams.get("offset") ?? 0);
+    const limit = Number(url.searchParams.get("limit") ?? allTrips.length);
+    const page = allTrips.slice(offset, offset + limit);
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(page) });
+  });
+
+  await openTripsScreen(page);
+
+  // First page: exactly TRIPS_PAGE_SIZE (25) rows -- a full page, so more
+  // might exist and the button should appear.
+  await expect(page.locator(".trip-history-card")).toHaveCount(25);
+  const loadMoreBtn = page.locator("#trips-load-more");
+  await expect(loadMoreBtn).toBeVisible();
+  await expect(loadMoreBtn).toHaveText("Load more");
+
+  await loadMoreBtn.click();
+
+  // Second page: the remaining 5 rows -- short of a full page, so this is
+  // the last one and the button disappears rather than offering a fetch
+  // that would just return empty.
+  await expect(page.locator(".trip-history-card")).toHaveCount(30);
+  await expect(loadMoreBtn).toBeHidden();
+});
+
 test("deleting a trip is a soft delete (removed_from_ui update, not a real delete) and requires a second confirming click", async ({
   page,
 }) => {

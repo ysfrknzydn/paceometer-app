@@ -16,6 +16,7 @@ import { TripHistory } from "./ui/tripHistory.js";
 import { FeedbackRecorder } from "./ui/feedbackRecorder.js";
 import { AudioFeedback } from "./feedback/audioFeedback.js";
 import { SimulatedDrive } from "./dev/simulatedDrive.js";
+import { GlobalErrorHandler } from "./errorReporting/globalErrorHandler.js";
 import { gallonPriceToLiterPrice, literPriceToGallonPrice } from "./math/unitsMath.js";
 
 // --- Appearance: light / dark (2026-07-22) --------------------------------
@@ -119,6 +120,12 @@ const dashboardView = new DashboardView({
   onTripsOpen: () => tripHistory.load(),
 });
 dashboardView.setUnitSystem(savedUnitSystem);
+
+// Global error handler (2026-08-19, council review Tier 7): registered as
+// early as possible in the composition root, right after dashboardView
+// exists (it's the only thing this needs), so it's live before any other
+// module below gets a chance to throw during its own setup.
+new GlobalErrorHandler({ onError: (message) => dashboardView.showGlobalError(message) });
 
 // Trip history (2026-08-07): app.js still owns the gas-price setting (see
 // that entry above) and the unit-system setting (see above that), so

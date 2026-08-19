@@ -62,7 +62,7 @@ export default defineConfig({
       // SIGNED_IN event, which the "signed-in" project's restored session
       // (INITIAL_SESSION) never fires.
       name: "signed-out",
-      testMatch: /(auth|onboarding)\.spec\.js/,
+      testMatch: /(auth|onboarding|globalError)\.spec\.js/,
       use: { ...devices["Desktop Chrome"] },
     },
     {

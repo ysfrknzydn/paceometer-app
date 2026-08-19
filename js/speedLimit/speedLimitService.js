@@ -47,6 +47,16 @@ export class SpeedLimitService {
     // skips the real network lookup entirely so the "limit" state can be
     // exercised without a real drive.
     this._devOverrideMph = null;
+    // Separate from _devOverrideMph above (2026-08-19, council review Tier
+    // 7): a simulated drive with the override field left blank used to fall
+    // straight through to a real Overpass query against the tool's fixed
+    // (0,0) synthetic coordinates -- a real, if harmless (throttling means
+    // it only fires once per run, not repeatedly), pointless network call.
+    // SimulatedDrive.start()/stop() toggle this for the duration of a run
+    // regardless of whether an override value is actually set, so "no real
+    // querying while simulating" doesn't depend on the override having a
+    // value.
+    this._realQuerySuppressed = false;
   }
 
   getKnownLimitMph() {
@@ -61,6 +71,14 @@ export class SpeedLimitService {
     this._devOverrideMph = null;
   }
 
+  suppressRealQuery() {
+    this._realQuerySuppressed = true;
+  }
+
+  allowRealQuery() {
+    this._realQuerySuppressed = false;
+  }
+
   resetKnownLimit() {
     this._knownLimitMph = null;
   }
@@ -70,6 +88,7 @@ export class SpeedLimitService {
   // change instant-to-instant, so this eventual consistency is fine.
   async maybeQuery(coords, timestamp) {
     if (this._devOverrideMph !== null) return;
+    if (this._realQuerySuppressed) return;
     if (this._queryInFlight) return;
 
     const distanceSinceLastQuery = this._lastQuery

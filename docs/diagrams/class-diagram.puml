@@ -155,6 +155,11 @@ class FeedbackRecorder {
   + cancel()
 }
 
+class GlobalErrorHandler {
+  --
+  + GlobalErrorHandler(onError)
+}
+
 AuthController ..> App : «use» startApp/stopApp/\nsetViewportZoomEnabled
 AuthController "1" *-down- "2" PasswordToggle : owns
 
@@ -170,6 +175,8 @@ App "1" *-down- "1" SimulatedDrive : owns
 App "1" *-down- "1" TripHistory : owns
 App "1" *-down- "1" FeedbackRecorder : owns
 FeedbackRecorder ..> Trip : «use» isRecording (metadata\nsnapshot only)
+App "1" *-down- "1" GlobalErrorHandler : owns
+GlobalErrorHandler ..> DashboardView : «use» showGlobalError\n(via onError callback)
 
 SimulatedDrive ..> GeolocationTracker : «use» start/stopWatching,\nresetLastPosition
 SimulatedDrive ..> SpeedLimitService : «use» setDevOverride,\nclearDevOverride

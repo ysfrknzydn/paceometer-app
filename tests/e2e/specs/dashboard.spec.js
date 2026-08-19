@@ -99,6 +99,41 @@ test("manual gas/brake dev tool ramps simulated speed up and down", async ({ pag
   await expect(page.locator("#trip-summary-save-status-text")).toHaveText("Simulated trip — not saved.");
 });
 
+// Real bug (2026-08-19, council review Tier 7): a simulated drive with the
+// #simulate-speed-limit override left blank used to fall straight through
+// to a real Overpass query against the tool's fixed (0,0) synthetic
+// coordinates -- SpeedLimitService.maybeQuery() only skipped the real
+// network lookup when a dev override *value* was actually set, not
+// whenever a simulated drive was merely running. Fixed with a separate
+// suppressRealQuery()/allowRealQuery() pair on SpeedLimitService that
+// SimulatedDrive.start()/stop() toggle unconditionally. The real GPS
+// pipeline (also active in this project's default Playwright config, which
+// grants a fixed mocked geolocation) would otherwise confound this
+// assertion by firing its own legitimate Overpass queries, so
+// navigator.geolocation.watchPosition is neutralized here to isolate what
+// this test is actually about.
+test("a simulated drive with no speed-limit override never queries the real Overpass API", async ({ page }) => {
+  await page.addInitScript(() => {
+    navigator.geolocation.watchPosition = () => 1;
+  });
+
+  let overpassCalls = 0;
+  await page.route("**/overpass*/**", (route) => {
+    overpassCalls += 1;
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ elements: [] }) });
+  });
+
+  await page.goto("/?dev=1");
+  await expect(page.locator("#app")).toBeVisible();
+  await page.click("#simulate-toggle");
+  await page.selectOption("#simulate-profile", "residential");
+  await page.click("#simulate-btn"); // #simulate-speed-limit left blank
+  await page.waitForTimeout(3000);
+  await page.click("#simulate-btn"); // stop
+
+  expect(overpassCalls).toBe(0);
+});
+
 test("simulated drive shows its own trip summary, never saved to Supabase", async ({ page }) => {
   const tripInserts = [];
   page.on("request", (req) => {
