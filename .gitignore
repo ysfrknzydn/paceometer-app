@@ -7,8 +7,14 @@ python/**/__pycache__/
 python/.pytest_cache/
 docs/TODO.pdf
 
-# tests/e2e (Playwright screen suite, see docs/CLAUDE.md's Commands section)
+# tests/e2e (Playwright screen suite, see the Testing section of the internal dev docs)
 test-screenshots/
 tests/e2e/.auth/
 tests/e2e/test-results/
 tests/e2e/playwright-report/
+
+# Internal AI-assistant tooling and dev-session logs -- not part of the shipped app
+docs/CLAUDE.md
+docs/TODO.md
+docs/SECURITY_TODO.md
+.claude/
