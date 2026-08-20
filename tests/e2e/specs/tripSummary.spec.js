@@ -3,6 +3,7 @@ import { setTheme, THEMES, VIEWPORTS } from "../helpers/theme.js";
 import { captureScreenshot } from "../helpers/screenshot.js";
 import { selectFirstAvailableVehicle } from "../helpers/vehiclePicker.js";
 import { mockMovingGeolocation } from "../helpers/geolocation.js";
+import { watchForRealTripInsert } from "../helpers/tripCleanup.js";
 
 async function completeAStationaryTrip(page) {
   // No sim tool needed here -- a real (mocked-stationary) GPS session is
@@ -12,6 +13,12 @@ async function completeAStationaryTrip(page) {
   await page.waitForTimeout(2000);
   await page.click("#trip-btn"); // End Trip
   await expect(page.locator("#trip-summary")).toBeVisible({ timeout: 10000 });
+  // Wait for the real save to actually land, not just the summary screen to
+  // appear -- a caller cleaning up this trip (watchForRealTripInsert) would
+  // otherwise race ahead of the insert it's meant to undo.
+  await expect(page.locator("#trip-summary-save-status-text")).toHaveText(/Trip saved\.|Save failed/, {
+    timeout: 10000,
+  });
 }
 
 async function completeAMovingTrip(page) {
@@ -44,9 +51,11 @@ for (const theme of THEMES) {
       await page.setViewportSize(viewport);
       await page.goto("/");
       await expect(page.locator("#app")).toBeVisible();
+      const tripInsert = watchForRealTripInsert(page);
       await completeAStationaryTrip(page);
       await expect(page.locator("#trip-summary-cost")).toBeHidden();
       await captureScreenshot(page, `trip_summary_no_vehicle_${theme}_${orientation}`);
+      await tripInsert.deleteIfCreated();
     });
 
     test(`trip summary, vehicle selected -- ${theme} ${orientation}`, async ({ page }) => {
@@ -55,6 +64,7 @@ for (const theme of THEMES) {
       await mockMovingGeolocation(page, { speedMph: 30, timestampStepMs: 60000 });
       await page.goto("/");
       await expect(page.locator("#app")).toBeVisible();
+      const tripInsert = watchForRealTripInsert(page);
 
       await page.click("#settings-nav");
       await selectFirstAvailableVehicle(page);
@@ -69,6 +79,7 @@ for (const theme of THEMES) {
       await page.click("#settings-nav");
       await page.click("#vehicle-clear");
       await page.click("#settings-back");
+      await tripInsert.deleteIfCreated();
     });
   }
 }
@@ -95,6 +106,7 @@ test("failed trip save shows Retry, which resends the same trip successfully", a
 
   await page.goto("/");
   await expect(page.locator("#app")).toBeVisible();
+  const tripInsert = watchForRealTripInsert(page);
   await completeAStationaryTrip(page);
 
   await expect(page.locator("#trip-summary-save-status-text")).toHaveText("Save failed — try again.");
@@ -109,4 +121,5 @@ test("failed trip save shows Retry, which resends the same trip successfully", a
   expect(insertAttempts).toBe(2);
 
   await page.click("#trip-summary-dismiss");
+  await tripInsert.deleteIfCreated();
 });

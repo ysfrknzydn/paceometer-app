@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { test, expect } from "@playwright/test";
 import { captureScreenshot } from "../helpers/screenshot.js";
 import { authStatePath } from "../helpers/paths.js";
+import { watchForRealTripInsert } from "../helpers/tripCleanup.js";
 
 const CHECKPOINT_KEY = "paceometer-in-progress-trip";
 
@@ -63,6 +64,7 @@ async function writeCheckpoint(page, { userId, lastWrittenAt = Date.now(), trip 
 test("a trip in progress survives a reload and resumes recording", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("#app")).toBeVisible();
+  const tripInsert = watchForRealTripInsert(page);
 
   await page.click("#trip-btn"); // Start Trip
   await expect(page.locator("#trip-btn")).toHaveText("End Trip");
@@ -91,6 +93,7 @@ test("a trip in progress survives a reload and resumes recording", async ({ page
   expect(checkpointAfterFinish).toBeNull();
 
   await page.click("#trip-summary-dismiss");
+  await tripInsert.deleteIfCreated();
 });
 
 test("a checkpoint belonging to a different account is discarded, not resumed", async ({ page }) => {
@@ -132,6 +135,7 @@ test("a stale checkpoint (older than the resumable window) is discarded", async 
 test("a fresh same-account checkpoint resumes even when fabricated directly", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("#app")).toBeVisible();
+  const tripInsert = watchForRealTripInsert(page);
 
   await writeCheckpoint(page, {
     userId: testAccountUserId(),
@@ -147,7 +151,13 @@ test("a fresh same-account checkpoint resumes even when fabricated directly", as
   // trip for the next test run.
   await page.click("#trip-btn");
   await expect(page.locator("#trip-summary")).toBeVisible();
+  // Wait for the real save to actually land before deleting it below --
+  // otherwise the delete could race ahead of the insert.
+  await expect(page.locator("#trip-summary-save-status-text")).toHaveText(/Trip saved\.|Save failed/, {
+    timeout: 10000,
+  });
   await page.click("#trip-summary-dismiss");
+  await tripInsert.deleteIfCreated();
 });
 
 test("a simulated drive never writes to the real trip checkpoint", async ({ page }) => {
