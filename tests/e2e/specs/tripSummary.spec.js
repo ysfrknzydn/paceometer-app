@@ -58,7 +58,11 @@ for (const theme of THEMES) {
       await tripInsert.deleteIfCreated();
     });
 
-    test(`trip summary, vehicle selected -- ${theme} ${orientation}`, async ({ page }) => {
+    // Tagged and kept on production (docs/TODO.md Tier 8-B) -- the only
+    // test in this suite that needs a real, non-empty vehicle_fuel_economy
+    // table, which nothing seeds locally. See playwright.config.js's
+    // project grep/grepInvert split.
+    test(`trip summary, vehicle selected -- ${theme} ${orientation}`, { tag: "@prodVehicleData" }, async ({ page }) => {
       await setTheme(page, theme);
       await page.setViewportSize(viewport);
       await mockMovingGeolocation(page, { speedMph: 30, timestampStepMs: 60000 });

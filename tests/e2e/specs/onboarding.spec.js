@@ -1,16 +1,19 @@
 import { test, expect } from "@playwright/test";
 import { setTheme, THEMES } from "../helpers/theme.js";
 import { captureScreenshot } from "../helpers/screenshot.js";
-import { TEST_EMAIL, getTestPassword } from "../helpers/testAccount.js";
+import { LOCAL_TEST_EMAIL, LOCAL_TEST_PASSWORD } from "../helpers/localSupabase.js";
 
-// Real sign-ins, same as auth.setup.js -- onboarding only shows on a
-// genuine "SIGNED_IN" event (js/auth.js), which the "signed-in" project's
-// restored-session tests (INITIAL_SESSION) never fire, so this has to live
-// in the "signed-out" project and pay for its own real network round trip.
+// Real sign-ins, same as auth.local.setup.js -- onboarding only shows on a
+// genuine "SIGNED_IN" event (js/auth.js), which the "signed-in-local"
+// project's restored-session tests (INITIAL_SESSION) never fire, so this
+// has to live in the "signed-out-local" project and pay for its own real
+// sign-in each time. Runs against local Supabase (docs/TODO.md Tier 8-B),
+// not production -- no real vehicle data needed here, so no reason to spend
+// a production round trip or account for a screen this simple.
 async function signIn(page) {
   await page.goto("/");
-  await page.fill("#email", TEST_EMAIL);
-  await page.fill("#password", getTestPassword());
+  await page.fill("#email", LOCAL_TEST_EMAIL);
+  await page.fill("#password", LOCAL_TEST_PASSWORD);
   await page.click("#auth-submit");
   await expect(page.locator("#onboarding-screen")).toBeVisible({ timeout: 15000 });
 }

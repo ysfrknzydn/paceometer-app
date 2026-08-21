@@ -1,23 +1,27 @@
-import fs from "node:fs";
 import { test, expect } from "@playwright/test";
 import { captureScreenshot } from "../helpers/screenshot.js";
-import { authStatePath } from "../helpers/paths.js";
 import { watchForRealTripInsert } from "../helpers/tripCleanup.js";
 
 const CHECKPOINT_KEY = "paceometer-in-progress-trip";
 
-// The real signed-in test account's user id, read straight out of the saved
-// session's own JWT (`sub` claim) -- same identity trip.js's checkpoint is
-// scoped by, so tests can fabricate a checkpoint as "this account" or "some
-// other account" without a live network call.
-function testAccountUserId() {
-  const state = JSON.parse(fs.readFileSync(authStatePath, "utf8"));
-  const entry = state.origins[0].localStorage.find(
-    (e) => e.name.startsWith("sb-") && e.name.endsWith("-auth-token"),
-  );
-  const session = JSON.parse(entry.value);
-  const payload = JSON.parse(Buffer.from(session.access_token.split(".")[1], "base64").toString());
-  return payload.sub;
+// The real signed-in account's user id, read straight out of the *current
+// page's own* session JWT (`sub` claim) -- same identity trip.js's
+// checkpoint is scoped by, so tests can fabricate a checkpoint as "this
+// account" or "some other account" without a live network call. Reads from
+// the live page rather than a static storageState file (docs/TODO.md Tier
+// 8-B) -- this suite now runs against either local or production Supabase
+// depending on the project, each with its own account/user id, so a
+// hardcoded file would silently read the wrong one for whichever backend
+// isn't currently active.
+async function testAccountUserId(page) {
+  return page.evaluate(() => {
+    const tokenKey = Object.keys(localStorage).find(
+      (key) => key.startsWith("sb-") && key.endsWith("-auth-token"),
+    );
+    const session = JSON.parse(localStorage.getItem(tokenKey));
+    const payload = JSON.parse(atob(session.access_token.split(".")[1]));
+    return payload.sub;
+  });
 }
 
 function fakeTripFields(overrides = {}) {
@@ -120,7 +124,7 @@ test("a stale checkpoint (older than the resumable window) is discarded", async 
 
   const fourHoursAgo = Date.now() - 4 * 60 * 60 * 1000;
   await writeCheckpoint(page, {
-    userId: testAccountUserId(),
+    userId: await testAccountUserId(page),
     lastWrittenAt: fourHoursAgo,
     trip: fakeTripFields({ startedAt: new Date(fourHoursAgo).toISOString(), lastSampleTimestamp: fourHoursAgo }),
   });
@@ -138,7 +142,7 @@ test("a fresh same-account checkpoint resumes even when fabricated directly", as
   const tripInsert = watchForRealTripInsert(page);
 
   await writeCheckpoint(page, {
-    userId: testAccountUserId(),
+    userId: await testAccountUserId(page),
     trip: fakeTripFields(),
   });
 

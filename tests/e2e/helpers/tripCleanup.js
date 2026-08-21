@@ -8,21 +8,20 @@
 // 2026-08-20 pass had to hand-sort out of ~195 rows before this project's
 // first pilot users could sign up.
 //
-// SUPABASE_URL/SUPABASE_ANON_KEY are duplicated from js/supabaseClient.js
-// rather than imported -- that file is loaded by the browser via an esm.sh
-// https:// specifier, which this Node-side test helper can't import
-// directly. Both values are the public, non-secret ones already committed
-// there (see that file's own comment) -- RLS policies are what actually gate
-// access, not this key.
-const SUPABASE_URL = "https://ojhhlxmbawckknnpgmfj.supabase.co";
-const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9qaGhseG1iYXdja2tubnBnbWZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NzAzMzIsImV4cCI6MjA5OTQ0NjMzMn0.PEI5_IU-V-UUEtO_mmSZt-iacbps-OoKiw-SxW4mLOY";
+// Deliberately backend-agnostic (docs/TODO.md Tier 8-B) -- most specs now
+// run against a disposable local Supabase instance instead of production,
+// and a handful (tagged @prodVehicleData) still deliberately target
+// production. Rather than hardcode a URL/key and silently clean up the
+// wrong backend, this mirrors whatever origin and apikey the app's own real
+// insert actually used.
 
 // Call before any trip-related action in a test. Observes every POST to
 // /rest/v1/trips (real or mocked) without intercepting it, so it never
 // interferes with a test's own page.route() mocking.
 export function watchForRealTripInsert(page) {
   let startedAt = null;
+  let origin = null;
+  let apikey = null;
   page.on("request", (request) => {
     if (request.method() !== "POST" || !request.url().includes("/rest/v1/trips")) return;
     let body;
@@ -31,7 +30,10 @@ export function watchForRealTripInsert(page) {
     } catch {
       return; // Not JSON -- nothing to capture.
     }
-    if (body?.started_at) startedAt = body.started_at;
+    if (!body?.started_at) return;
+    startedAt = body.started_at;
+    origin = new URL(request.url()).origin;
+    apikey = request.headers()["apikey"];
   });
 
   return {
@@ -58,7 +60,7 @@ export function watchForRealTripInsert(page) {
             headers: { apikey: anonKey, Authorization: `Bearer ${access_token}` },
           });
         },
-        { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY, startedAtValue: startedAt },
+        { url: origin, anonKey: apikey, startedAtValue: startedAt },
       );
     },
   };
